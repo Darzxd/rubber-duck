@@ -1,4 +1,4 @@
-# pizarra
+# rubber-duck
 
 Hackathon monorepo (39h). Two independent apps that share only `shared/protocol.ts`.
 
