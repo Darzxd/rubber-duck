@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* The board toggles its own theme from the toolbar, so `dark:` follows a class
+   instead of the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
