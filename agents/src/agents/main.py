@@ -38,6 +38,11 @@ class IngestRequest(BaseModel):
     ts: float
 
 
+class BriefRequest(BaseModel):
+    session_id: str
+    brief: str
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}
@@ -87,6 +92,17 @@ async def ingest(req: IngestRequest) -> dict:
     return {"accepted": True, "queued": kept}
 
 
+@app.post("/brief")
+async def brief(req: BriefRequest) -> dict:
+    """What the room is here to do, set before anybody speaks.
+
+    Idempotent on purpose: everyone who joins posts the brief they were shown,
+    so a late arrival re-asserting it is harmless."""
+    saved = organizer_store.set_brief(req.session_id, req.brief)
+    await emit(req.session_id, "session.brief", {"brief": saved})
+    return {"brief": saved}
+
+
 @app.get("/digest/{session_id}")
 async def digest(session_id: str) -> dict:
     s = organizer_store.get(session_id)
@@ -94,6 +110,8 @@ async def digest(session_id: str) -> dict:
         "pending": len(s.pending),
         "heard": len(s.transcript),
         "digest": s.digest,
+        "brief": s.brief,
+        "notepad": s.notepad,
     }
 
 
