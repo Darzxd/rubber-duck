@@ -103,6 +103,13 @@ async def realtime_session() -> dict:
     if not settings.openai_api_key:
         raise HTTPException(500, "OPENAI_API_KEY is not set")
 
+    transcription: dict = {
+        "model": settings.openai_realtime_model,
+        "language": settings.openai_realtime_language,
+    }
+    if settings.openai_realtime_prompt:
+        transcription["prompt"] = settings.openai_realtime_prompt
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         r = await client.post(
             "https://api.openai.com/v1/realtime/client_secrets",
@@ -115,14 +122,13 @@ async def realtime_session() -> dict:
                     "type": "transcription",
                     "audio": {
                         "input": {
-                            "transcription": {
-                                "model": settings.openai_realtime_model,
-                                "language": settings.openai_realtime_language,
-                                "prompt": settings.openai_realtime_prompt,
-                            },
+                            "transcription": transcription,
+                            # Room noise opens segments that hold no speech,
+                            # and the model fills them with invented text.
+                            "noise_reduction": {"type": "near_field"},
                             "turn_detection": {
                                 "type": "server_vad",
-                                "threshold": 0.6,
+                                "threshold": 0.75,
                                 "prefix_padding_ms": 400,
                                 "silence_duration_ms": (
                                     settings.openai_realtime_silence_ms
