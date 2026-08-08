@@ -5,11 +5,12 @@ import NameField from "./NameField";
 import MicPermission, { type MicStatus } from "./MicPermission";
 
 type JoinScreenProps = {
-  sessionName: string;
-  onJoin: (name: string) => void;
+  /** Optional so the landing can stay a Server Component until the session
+   *  layer has a real handler to pass down. */
+  onJoin?: (name: string) => void;
 };
 
-export default function JoinScreen({ sessionName, onJoin }: JoinScreenProps) {
+export default function JoinScreen({ onJoin }: JoinScreenProps) {
   const [name, setName] = useState("");
   const [micStatus, setMicStatus] = useState<MicStatus>("idle");
 
@@ -28,50 +29,36 @@ export default function JoinScreen({ sessionName, onJoin }: JoinScreenProps) {
       // layer, so release the device instead of holding it open.
       stream.getTracks().forEach((track) => track.stop());
       setMicStatus("granted");
-      onJoin(trimmedName);
+      onJoin?.(trimmedName);
     } catch {
       setMicStatus("denied");
     }
   }
 
   return (
-    <main className="flex min-h-full flex-1 items-center justify-center bg-neutral-100 px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
-        <header className="flex flex-col gap-1.5">
-          <p className="text-xs font-medium uppercase tracking-widest text-neutral-400">
-            Joining
-          </p>
-          <h1 className="text-2xl font-semibold leading-tight text-neutral-900">
-            {sessionName}
-          </h1>
-        </header>
+    <form
+      onSubmit={handleSubmit}
+      className="flex w-full max-w-md flex-col gap-5 rounded-3xl border-[3px] border-neutral-900 bg-white p-6 shadow-[6px_6px_0_rgba(17,17,17,0.12)] sm:p-7"
+    >
+      <NameField value={name} onChange={setName} disabled={isRequesting} />
 
-        <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-5">
-          <NameField
-            value={name}
-            onChange={setName}
-            disabled={isRequesting}
-          />
+      <MicPermission status={micStatus} />
 
-          <MicPermission status={micStatus} />
+      <button
+        type="submit"
+        disabled={!canSubmit}
+        className="w-full rounded-xl bg-neutral-900 px-4 py-3.5 text-base font-semibold text-white transition-transform duration-150 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 active:translate-y-0 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      >
+        {isRequesting
+          ? "Esperando el micrófono…"
+          : micStatus === "denied"
+            ? "Probar de nuevo"
+            : "Entrar a la pizarra"}
+      </button>
 
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="w-full rounded-lg bg-neutral-900 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-900/20 disabled:cursor-not-allowed disabled:bg-neutral-300"
-          >
-            {isRequesting
-              ? "Waiting for the microphone…"
-              : micStatus === "denied"
-                ? "Try again"
-                : "Join the board"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-xs text-neutral-400">
-          No account needed. Your name is only visible to this session.
-        </p>
-      </div>
-    </main>
+      <p className="text-center text-xs text-neutral-500">
+        No hace falta cuenta. Tu nombre solo lo ve esta sesión.
+      </p>
+    </form>
   );
 }

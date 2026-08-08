@@ -1,14 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import JoinScreen from "@/components/session/JoinScreen";
+import LandingScreen from "@/components/landing/LandingScreen";
 
 export default function Home() {
   const router = useRouter();
 
   return (
-    <JoinScreen
-      sessionName="Roadmap sync"
+    <LandingScreen
       onJoin={(name) => {
         router.push(`/board?name=${encodeURIComponent(name)}`);
       }}
