@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import LiveBadge from "./LiveBadge";
 import PresenceCursor from "./PresenceCursor";
 import Toolbar, { type ToolId } from "./Toolbar";
@@ -9,6 +9,7 @@ import { SAMPLE_AUTHORS, type Author } from "./authors";
 type WhiteboardProps = {
   sessionName: string;
   authors?: Author[];
+  children?: ReactNode;
 };
 
 const DOT_SIZE = "22px 22px";
@@ -16,6 +17,7 @@ const DOT_SIZE = "22px 22px";
 export default function Whiteboard({
   sessionName,
   authors = SAMPLE_AUTHORS,
+  children,
 }: WhiteboardProps) {
   const [activeTool, setActiveTool] = useState<ToolId>("select");
   const [isDark, setIsDark] = useState(false);
@@ -38,6 +40,8 @@ export default function Whiteboard({
           </p>
 
           <LiveBadge />
+
+          {children}
 
           {authors.map((author) => (
             <PresenceCursor key={author.id} author={author} />

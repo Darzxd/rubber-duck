@@ -3,7 +3,9 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Whiteboard from "@/components/canvas/Whiteboard";
+import AgentNode from "@/components/canvas/AgentNode";
 import TranscriptOverlay from "@/components/debug/TranscriptOverlay";
+import { useBoardEvents } from "@/lib/board";
 import { useSession } from "@/lib/session";
 
 const SESSION_ID = "demo";
@@ -16,10 +18,15 @@ function BoardInner() {
     sessionId: SESSION_ID,
     author: name,
   });
+  const { nodes } = useBoardEvents(SESSION_ID);
 
   return (
     <>
-      <Whiteboard sessionName="Roadmap sync" />
+      <Whiteboard sessionName="Roadmap sync">
+        {nodes.map((node, i) => (
+          <AgentNode key={node.id} node={node} index={i} />
+        ))}
+      </Whiteboard>
       <TranscriptOverlay
         recording={recording}
         supported={supported}
