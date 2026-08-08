@@ -13,9 +13,9 @@ export default function NameField({
     <div className="flex flex-col gap-2">
       <label
         htmlFor="participant-name"
-        className="text-sm font-medium text-neutral-700"
+        className="text-sm font-semibold text-neutral-700"
       >
-        Your name
+        Tu nombre
       </label>
       <input
         id="participant-name"
@@ -25,10 +25,9 @@ export default function NameField({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
         autoComplete="off"
-        autoFocus
         maxLength={40}
-        placeholder="How the team will see you"
-        className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-base text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+        placeholder="Cómo te va a ver el equipo"
+        className="w-full rounded-xl border-2 border-neutral-300 bg-white px-4 py-3 text-base text-neutral-900 transition-colors placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none disabled:cursor-not-allowed disabled:bg-neutral-100"
       />
     </div>
   );

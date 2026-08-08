@@ -5,25 +5,25 @@ type MicPermissionProps = {
 };
 
 const MESSAGES: Record<MicStatus, string> = {
-  idle: "Your browser will ask for the microphone. Nothing is recorded — only the live transcript reaches the board.",
-  requesting: "Waiting for you to allow the microphone…",
-  granted: "Microphone ready.",
+  idle: "El navegador te va a pedir el micrófono. No se graba nada: a la pizarra solo llega la transcripción.",
+  requesting: "Esperando que permitas el micrófono…",
+  granted: "Micrófono listo.",
   denied:
-    "The microphone is blocked. Allow it from the icon in the address bar, then try again.",
+    "El micrófono está bloqueado. Habilitalo desde el ícono en la barra de direcciones y probá de nuevo.",
 };
 
 const TONES: Record<MicStatus, string> = {
   idle: "border-neutral-200 bg-neutral-50 text-neutral-600",
-  requesting: "border-amber-200 bg-amber-50 text-amber-800",
-  granted: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  denied: "border-red-200 bg-red-50 text-red-800",
+  requesting: "border-amber-300 bg-amber-50 text-amber-800",
+  granted: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  denied: "border-red-300 bg-red-50 text-red-800",
 };
 
 export default function MicPermission({ status }: MicPermissionProps) {
   return (
     <p
       role={status === "denied" ? "alert" : undefined}
-      className={`flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm leading-relaxed ${TONES[status]}`}
+      className={`flex items-start gap-2.5 rounded-xl border-2 px-3.5 py-3 text-sm leading-relaxed ${TONES[status]}`}
     >
       <MicIcon />
       <span>{MESSAGES[status]}</span>
