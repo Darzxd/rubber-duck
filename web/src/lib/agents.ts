@@ -23,3 +23,17 @@ export async function postIngest(chunk: TranscriptChunk): Promise<void> {
     throw new Error(`ingest failed: ${res.status}`);
   }
 }
+
+export async function postBrief(
+  sessionId: string,
+  brief: string,
+): Promise<void> {
+  const res = await fetch(`${AGENTS_URL}/brief`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, brief }),
+  });
+  if (!res.ok) {
+    throw new Error(`brief failed: ${res.status}`);
+  }
+}
