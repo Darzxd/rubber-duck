@@ -9,7 +9,6 @@ import {
   ListIcon,
   MicIcon,
   PenIcon,
-  PlusIcon,
   PollIcon,
   RectToolIcon,
   RedoIcon,
@@ -119,17 +118,6 @@ export default function ToolRail({
 
   return (
     <div className="no-scrollbar pointer-events-auto absolute left-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-[6.5rem] flex-col gap-2 overflow-y-auto">
-      <div className={CARD}>
-        <p className={SECTION_LABEL}>Crear</p>
-        <button
-          type="button"
-          aria-label="Nuevo elemento"
-          className="grid h-9 w-full place-items-center rounded-lg border border-dashed border-neutral-300 text-neutral-500 transition-colors hover:border-neutral-900 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-white dark:hover:text-white"
-        >
-          <PlusIcon />
-        </button>
-      </div>
-
       <div className={`${CARD} relative`}>
         <p className={SECTION_LABEL}>Construir</p>
         <div className="grid grid-cols-2 gap-1">
