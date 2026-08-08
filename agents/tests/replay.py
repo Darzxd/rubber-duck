@@ -1,5 +1,5 @@
-"""Replays the scripted meeting through the real Organizer so we can read what
-it understood and keep tuning the prompt.
+"""Replays the scripted meeting through the real Organizer so we can read the
+summary it builds and keep tuning the prompt.
 
     uv run python tests/replay.py           # the fixture meeting
     uv run python tests/replay.py mine.txt  # "Author: line" per row
@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from agents import organizer_loop as loop  # noqa: E402
 from agents import organizer_store as store  # noqa: E402
-from agents.nodes.organizer import is_noise, reconcile  # noqa: E402
+from agents.nodes.organizer import is_noise, summarize  # noqa: E402
 from fixtures.meeting import SCRIPT  # noqa: E402
 
 SESSION = "replay"
@@ -25,7 +25,6 @@ DIM = "\033[2m"
 BOLD = "\033[1m"
 RED = "\033[31m"
 GREEN = "\033[32m"
-YELLOW = "\033[33m"
 CYAN = "\033[36m"
 OFF = "\033[0m"
 
@@ -35,33 +34,27 @@ def load(path: str | None) -> list[tuple[str, str, float]]:
         return SCRIPT
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     out = []
-    for i, line in enumerate(l for l in lines if l.strip()):
+    for i, line in enumerate(line for line in lines if line.strip()):
         author, _, text = line.partition(":")
         out.append((author.strip(), text.strip(), i * 2.0))
     return out
 
 
-def show_threads() -> None:
-    threads = store.get(SESSION).threads.values()
-    if not threads:
-        print(f"  {DIM}(sin hilos){OFF}")
+def show_digest() -> None:
+    digest = store.get(SESSION).digest
+    if not digest["points"]:
+        print(f"  {DIM}(sin resumen todavia){OFF}")
         return
-    for t in threads:
-        mark = f"{GREEN}settled{OFF}" if t["status"] == "settled" else f"{YELLOW}ongoing{OFF}"
-        print(f"  {BOLD}{t['topic'] or '(sin titulo)'}{OFF}  [{mark}]")
-        if t["summary"]:
-            print(f"    {DIM}{t['summary']}{OFF}")
-        for it in t["intents"]:
-            print(f"    {CYAN}{it['author']}{OFF} quiere {it['wants']}")
-        for q in t.get("open_questions") or []:
-            print(f"    {DIM}? {q}{OFF}")
+    print(f"  {BOLD}{digest['summary']}{OFF}  {DIM}rev {digest['revision']}{OFF}")
+    for p in digest["points"]:
+        print(f"    {CYAN}{p['author']}{OFF} {p['text']}")
 
 
 async def main() -> None:
     script = load(sys.argv[1] if len(sys.argv) > 1 else None)
     started = time.time()
     calls = 0
-    settled: list[str] = []
+    redraws = 0
 
     print(f"{BOLD}replay · {len(script)} lineas{OFF}\n")
 
@@ -75,31 +68,32 @@ async def main() -> None:
         print(f"{GREEN}·{OFF} {author}: {text}")
         store.add_chunk(SESSION, chunk)
 
-        # The loop reconciles on a lull. Replaying has no real pauses, so we
-        # use the gap the script itself declares.
-        gap = next(
-            (o - offset for _, _, o in script if o > offset), loop.QUIET_SEC
-        )
-        pending = len(store.get(SESSION).pending)
-        if pending < loop.MAX_PENDING and gap < loop.QUIET_SEC:
+        # The live loop debounces before it summarizes. Replaying has no real
+        # pauses, so we use the gap the script itself declares: anything said
+        # inside the debounce window rides along in the same pass.
+        gap = next((o - offset for _, _, o in script if o > offset), loop.IDLE_SEC)
+        if gap < loop.DEBOUNCE_SEC:
             continue
 
+        store.take_pending(SESSION)
         calls += 1
-        ready = await reconcile(SESSION, store.take_pending(SESSION))
-        for t in ready:
-            settled.append(t["topic"])
-            print(f"  {GREEN}→ settled:{OFF} {t['topic']}")
+        digest = await summarize(SESSION)
+        if digest is None:
+            print(f"{DIM}  ── pasada {calls}: sin cambios ──{OFF}\n")
+            continue
+        redraws += 1
         print(f"{DIM}  ── pasada {calls} ──{OFF}")
-        show_threads()
+        show_digest()
         print()
 
     if store.get(SESSION).pending:
+        store.take_pending(SESSION)
         calls += 1
-        await reconcile(SESSION, store.take_pending(SESSION))
+        if await summarize(SESSION) is not None:
+            redraws += 1
 
-    print(f"\n{BOLD}final{OFF}  ·  {calls} llamadas al modelo")
-    show_threads()
-    print(f"\n{DIM}settled: {settled or 'ninguno'}{OFF}")
+    print(f"\n{BOLD}final{OFF}  ·  {calls} llamadas al modelo  ·  {redraws} redibujos")
+    show_digest()
 
 
 if __name__ == "__main__":

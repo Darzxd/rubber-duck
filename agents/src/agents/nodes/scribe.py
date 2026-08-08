@@ -5,9 +5,9 @@ from agents.state import GraphState
 
 async def scribe(state: GraphState) -> dict:
     # TODO: maintain live lists of decisions, open items, and open questions
-    # derived from the settled thread. Publish patches, not full snapshots.
-    thread = state["settled_thread"]
-    if not thread:
+    # derived from the digest. Publish patches, not full snapshots.
+    digest = state["digest"]
+    if not digest["points"]:
         return {}
 
     patch = {"decisions": [], "openItems": [], "openQuestions": []}
@@ -15,6 +15,6 @@ async def scribe(state: GraphState) -> dict:
     await publish(
         get_settings().portal_channel_id,
         "scribe.patch",
-        {"threadId": thread["id"], "patch": patch},
+        {"revision": digest["revision"], "patch": patch},
     )
     return {}

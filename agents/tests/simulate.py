@@ -57,35 +57,23 @@ async def main() -> None:
             mark = f"{CYAN}→{OFF}" if queued else f"{DIM}✗{OFF}"
             print(f"{mark} {author}: {text}")
 
-    # The loop closes a thread only after the silence convinces it. Wait for
-    # that instead of guessing a number.
-    print(f"\n{DIM}esperando a que el organizer cierre los hilos...{OFF}")
-    deadline = time.time() + 90
+    print(f"\n{DIM}esperando a que el organizer termine la ultima pasada...{OFF}")
+    deadline = time.time() + 60
     async with httpx.AsyncClient(timeout=10.0) as client:
         while True:
-            data = (
-                await client.get(f"{args.url}/threads/{args.session}")
-            ).json()
-            open_threads = [
-                t for t in data["threads"] if t["status"] != "settled"
-            ]
-            if data["threads"] and not open_threads and not data["pending"]:
+            data = (await client.get(f"{args.url}/digest/{args.session}")).json()
+            if not data["pending"] and data["digest"]["revision"]:
                 break
             if time.time() > deadline:
                 print(f"{DIM}  (timeout, muestro como quedo){OFF}")
                 break
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
 
-    print(f"\n{BOLD}lo que entendio{OFF}")
-    for t in data["threads"]:
-        print(
-            f"  {BOLD}{t['topic']}{OFF}  [{t['status']}]  {t['chunks']} chunks"
-        )
-        print(f"    {DIM}{t['summary']}{OFF}")
-        for it in t["intents"]:
-            print(f"    {CYAN}{it['author']}{OFF} quiere {it['wants']}")
-        for q in t["open_questions"]:
-            print(f"    {DIM}? {q}{OFF}")
+    digest = data["digest"]
+    print(f"\n{BOLD}lo que entendio{OFF}  {DIM}rev {digest['revision']}{OFF}")
+    print(f"  {digest['summary']}")
+    for p in digest["points"]:
+        print(f"    {CYAN}{p['author']}{OFF} {p['text']}")
     print(f"\n{DIM}pendientes sin procesar: {data['pending']}{OFF}")
 
 

@@ -61,12 +61,13 @@ SCRIPT: list[Line] = [
 ]
 
 EXPECT = {
-    "threads": 2,
-    "topics": ["persistencia de la transcripcion", "colores por participante"],
-    "intents": {
-        "Ignacio": "guardar solo el snapshot del canvas en Supabase",
-        "Nico": "no guardar la transcripcion completa por tamano",
-    },
+    "points": [
+        "guardar solo el snapshot del canvas en Supabase",
+        "no guardar la transcripcion completa por tamano",
+        "una tabla sessions con un jsonb adentro",
+        "color fijo por persona, asignado al entrar",
+        "el color va con el id de la sesion",
+    ],
     "dropped": ["Hola, se escucha?", "esta sesion cual es, la tres?", "jajaja"],
 }
 

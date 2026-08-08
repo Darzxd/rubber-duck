@@ -11,9 +11,9 @@ from pydantic import BaseModel
 
 from agents import organizer_loop, organizer_store
 from agents.bus import emit, sessions, subscribe, unsubscribe
-from agents.graph import graph
+from agents.orchestrator import dispatch
 from agents.settings import get_settings
-from agents.state import Thread, TranscriptChunk
+from agents.state import TranscriptChunk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agents.api")
@@ -53,16 +53,6 @@ async def list_sessions() -> dict:
     return {"sessions": sessions()}
 
 
-async def _dispatch(session_id: str, thread: Thread) -> None:
-    await graph.ainvoke(
-        {
-            "session_id": session_id,
-            "thread": thread,
-            "dispatch": ["architect"],
-        }
-    )
-
-
 @app.post("/ingest")
 async def ingest(req: IngestRequest) -> dict:
     chunk: TranscriptChunk = {"author": req.author, "text": req.text, "ts": req.ts}
@@ -77,7 +67,7 @@ async def ingest(req: IngestRequest) -> dict:
 
     # Ingest only queues. The Organizer loop listens on its own clock, so a
     # slow model call never holds up the next thing somebody says.
-    organizer_loop.ensure_running(req.session_id, _dispatch)
+    organizer_loop.ensure_running(req.session_id, dispatch)
     kept = organizer_loop.submit(req.session_id, chunk)
     if not kept:
         await emit(
@@ -97,25 +87,13 @@ async def ingest(req: IngestRequest) -> dict:
     return {"accepted": True, "queued": kept}
 
 
-@app.get("/threads/{session_id}")
-async def threads(session_id: str) -> dict:
+@app.get("/digest/{session_id}")
+async def digest(session_id: str) -> dict:
     s = organizer_store.get(session_id)
     return {
         "pending": len(s.pending),
-        "threads": [
-            {
-                "id": t["id"],
-                "topic": t["topic"],
-                "summary": t["summary"],
-                "status": t["status"],
-                "dispatched": t["dispatched"],
-                "participants": t["participants"],
-                "intents": t["intents"],
-                "open_questions": t.get("open_questions") or [],
-                "chunks": len(t["chunks"]),
-            }
-            for t in s.threads.values()
-        ],
+        "heard": len(s.transcript),
+        "digest": s.digest,
     }
 
 

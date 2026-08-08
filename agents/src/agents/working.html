@@ -123,19 +123,19 @@
     <div class="arrow">→</div>
     <div class="stage" id="st-organizer">
       <h2>Organizer · LLM</h2><div class="big" id="c-organized">0</div>
-      <div class="sub">organize runs</div>
+      <div class="sub">summary revisions</div>
     </div>
     <div class="arrow">→</div>
     <div class="stage" id="st-agents">
       <h2>Dispatch</h2>
       <div class="agent"><span class="n">architect</span><span id="c-architect">0</span></div>
-      <div class="agent dim"><span class="n">critic</span><span>soon</span></div>
-      <div class="agent dim"><span class="n">scribe</span><span>soon</span></div>
+      <div class="agent dim"><span class="n">critic</span><span>stub</span></div>
+      <div class="agent dim"><span class="n">scribe</span><span>stub</span></div>
     </div>
   </div>
 
   <div>
-    <h2>Live threads · what the organizer is tracking</h2>
+    <h2>Running summary · what the organizer is keeping</h2>
     <div id="threads"><span class="empty">nothing yet</span></div>
   </div>
 
@@ -248,63 +248,45 @@
         } else if (c.stage === "queued") {
           $("c-buffer").textContent = c.pending;
           flash("st-buffer");
-        } else if (c.stage === "dropped") {
-          for (const text of c.texts || []) {
-            counts.noise++;
-            const match = [...$("transcript").children].find(
-              (n) => n.dataset && n.dataset.text === text);
-            if (match) {
-              match.classList.add("dropped");
-              match.insertAdjacentHTML("beforeend", '<span class="tag">discarded</span>');
-            }
-            log("noise", `discarded "${text}"`, sid);
-          }
-          $("c-noise").textContent = counts.noise;
-          flash("st-filter");
-        } else if (c.stage === "organized") {
-          counts.organized++;
-          $("c-organized").textContent = counts.organized;
-          $("c-buffer").textContent = c.pending ?? 0;
-          flash("st-organizer");
-          const threads = c.threads || [];
-          $("threads").innerHTML = threads.length
-            ? threads.map((t) => {
-                const wants = (t.intents || []).map((i) =>
-                  `<div class="want"><b>${i.author}</b> quiere ${i.wants}</div>`).join("");
-                return `<div class="thread ${t.settled ? "settled" : "ongoing"}">` +
-                  `<div class="thead">${t.settled ? "●" : "○"} ${t.topic}` +
-                  `<span class="who2">${(t.participants || []).join(", ")}</span></div>` +
-                  wants + `</div>`;
-              }).join("")
-            : '<span class="empty">nothing worth tracking yet</span>';
-          log("organize",
-            `${c.chunks} chunks → ` + (threads.length
-              ? threads.map((t) => `${t.topic} [${t.settled ? "settled" : "ongoing"}]`).join(", ")
-              : "nothing worth keeping"), sid);
         }
         return;
       }
 
-      if (p.event === "organizer.settled") {
-        log("settled", `${c.topic} — ${c.summary}`, sid);
+      if (p.event === "organizer.digest") {
+        counts.organized++;
+        $("c-organized").textContent = counts.organized;
+        $("c-buffer").textContent = 0;
+        flash("st-organizer");
+        const points = c.points || [];
+        $("threads").innerHTML =
+          `<div class="thread settled">` +
+          `<div class="thead">● ${c.summary || "(sin resumen)"}` +
+          `<span class="who2">rev ${c.revision}</span></div>` +
+          points.map((pt) => `<div class="want"><b>${pt.author}</b> ${pt.text}</div>`).join("") +
+          `</div>`;
+        log("digest", `rev ${c.revision} · ${points.length} puntos · ${c.summary}`, sid);
+        return;
+      }
+
+      if (p.event === "orchestrator.dispatch") {
+        flash("st-agents");
+        log("dispatch", `rev ${c.revision} → ${(c.agents || []).join(", ")}`, sid);
         return;
       }
 
       if (p.event === "architect.draw") {
         const nodes = c.nodes || [];
-        counts.architect += nodes.length;
+        const edges = c.edges || [];
+        counts.architect = nodes.length;
         $("c-architect").textContent = counts.architect;
         flash("st-agents");
-        for (const n of nodes) {
-          const el = document.createElement("div");
-          el.className = "note";
-          el.innerHTML =
-            `<div class="topic">${n.topic || "sin tema"}</div>` +
-            `<div class="label">${n.label}</div>` +
-            `<div class="meta">${n.author || "?"} · ${c.threadId || ""}</div>`;
-          put("board", el);
-        }
-        log("draw", nodes.map((n) => `"${n.topic || n.label}"`).join(", "), sid);
+        // The Architect always sends the whole board, so we redraw it whole.
+        $("board").innerHTML = nodes.length
+          ? nodes.map((n) =>
+              `<div class="note"><div class="label">${n.label}</div>` +
+              `<div class="meta">${n.author || "?"} · rev ${c.revision}</div></div>`).join("")
+          : '<span class="empty">no nodes yet</span>';
+        log("draw", `${nodes.length} nodos, ${edges.length} flechas (rev ${c.revision})`, sid);
         return;
       }
 

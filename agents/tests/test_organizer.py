@@ -1,5 +1,7 @@
-"""The Organizer is the only agent that decides what reaches the board, so a
-bad model response has to end in a no-op, never in a crash."""
+"""The Organizer keeps a running summary. What matters is that a bad model
+response never takes the session down, and that a summary which did not change
+never reaches the board — an identical redraw makes the canvas flicker for
+nothing."""
 
 import json
 from types import SimpleNamespace
@@ -8,101 +10,70 @@ import pytest
 
 from agents import organizer_store as store
 from agents.nodes import organizer
-from agents.nodes.organizer import is_noise, is_substantial, reconcile
-from agents.state import Thread
+from agents.state import point_id
 
 
 @pytest.fixture
 def llm(monkeypatch):
-    """Pins whatever raw string the model is pretending to return."""
+    """Pins what the model answers, so each test states one behaviour."""
+    box = SimpleNamespace(raw="{}", calls=0, last=None)
 
-    box = SimpleNamespace(raw="{}")
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            box.calls += 1
+            box.last = kwargs
+            if isinstance(box.raw, Exception):
+                raise box.raw
+            msg = SimpleNamespace(content=box.raw)
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
 
     class FakeClient:
-        def __init__(self, **_):
-            self.chat = SimpleNamespace(completions=self)
-
-        async def create(self, **_):
-            message = SimpleNamespace(content=box.raw)
-            return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
 
     monkeypatch.setattr(organizer, "AsyncOpenAI", FakeClient)
     monkeypatch.setattr(
         organizer,
         "get_settings",
         lambda: SimpleNamespace(
-            openai_api_key="test", openai_organizer_model="test-model"
+            openai_api_key="test-key", openai_organizer_model="test-model"
         ),
     )
     return box
 
 
-def thread(**over) -> Thread:
-    base: Thread = {
-        "id": "th_1",
-        "topic": "un tema",
-        "summary": "",
-        "chunks": [
-            {"author": "Ignacio", "text": "x" * 60, "ts": 0.0},
-            {"author": "Nico", "text": "y" * 60, "ts": 1.0},
-        ],
-        "participants": ["Ignacio", "Nico"],
-        "intents": [],
-        "status": "ongoing",
-        "created_at": 0.0,
-        "last_touched": 0.0,
-        "dispatched": False,
-    }
-    return {**base, **over}
+def digest_of(points, summary="algo"):
+    return json.dumps({"summary": summary, "points": points})
+
+
+def heard(text="algo con sustancia", author="Ignacio"):
+    store.add_chunk("s", {"author": author, "text": text, "ts": 0.0})
+    store.take_pending("s")
 
 
 class TestIsNoise:
-    @pytest.mark.parametrize(
-        "text",
-        ["jajaja", "JAJA", "jeje", "xd", "ja ja".replace(" ", ""), "hahaha"],
-    )
-    def test_laughter(self, chunk, text):
-        assert is_noise(chunk(text=text))
+    @pytest.mark.parametrize("text", ["jajaja", "JAJAJAJA", "jeje", "xd", ""])
+    def test_laughter_and_empty(self, chunk, text):
+        assert organizer.is_noise(chunk(text=text)) is True
 
-    @pytest.mark.parametrize("text", ["si", "Sí", "ok", "dale?", "eh", "  "])
-    def test_single_word_filler(self, chunk, text):
-        assert is_noise(chunk(text=text))
+    @pytest.mark.parametrize("text", ["dale", "ok", "claro", "exacto", "ajá"])
+    def test_lone_filler(self, chunk, text):
+        assert organizer.is_noise(chunk(text=text)) is True
 
     @pytest.mark.parametrize(
         "text",
         [
-            "no guardemos la transcripcion completa",
-            "si, con el snapshot alcanza",
-            "dale, me cierra lo de Supabase",
+            "dale, lo guardamos en Supabase",
+            "no me convence el polling",
+            "claro que sí, pero el costo sube",
         ],
     )
-    def test_keeps_filler_words_inside_a_real_sentence(self, chunk, text):
-        assert not is_noise(chunk(text=text))
-
-
-class TestIsSubstantial:
-    def test_needs_a_topic(self):
-        assert not is_substantial(thread(topic=""))
-
-    def test_needs_more_than_one_chunk(self):
-        assert not is_substantial(
-            thread(chunks=[{"author": "N", "text": "z" * 200, "ts": 0.0}])
-        )
-
-    def test_needs_enough_spoken_text(self):
-        short = [
-            {"author": "Ignacio", "text": "bueno", "ts": 0.0},
-            {"author": "Nico", "text": "dale", "ts": 1.0},
-        ]
-        assert not is_substantial(thread(chunks=short))
-
-    def test_accepts_a_developed_thread(self):
-        assert is_substantial(thread())
+    def test_filler_inside_a_real_sentence_survives(self, chunk, text):
+        assert organizer.is_noise(chunk(text=text)) is False
 
 
 class TestMalformedModelOutput:
-    """Every one of these must leave the session untouched and return no work
-    for the Architect, rather than raising."""
+    """CLAUDE.md: bad agent output must be ignored, never crash the canvas."""
 
     @pytest.mark.parametrize(
         "raw",
@@ -112,204 +83,121 @@ class TestMalformedModelOutput:
             "null",
             "[1, 2, 3]",
             '"just a string"',
-            '{"threads": "nope"}',
-            '{"threads": [null, 7, "x"]}',
-            '{"threads": {}}',
-            '{"drop": "everything"}',
-            '{"drop": ["a", null, 99]}',
+            '{"points": "nope"}',
+            '{"points": [null, 7, "x"]}',
+            '{"points": {}}',
+            '{"points": [{"author": "Ignacio"}]}',
+            '{"summary": null, "points": null}',
+            '{"unexpected": "shape"}',
         ],
     )
-    @pytest.mark.asyncio
-    async def test_survives(self, llm, chunk, raw):
+    async def test_survives_and_keeps_previous(self, llm, raw):
         llm.raw = raw
-        ready = await reconcile("s1", [chunk(text="hola que tal")])
-        assert ready == []
-        assert store.get("s1").threads == {}
+        heard()
 
-    @pytest.mark.asyncio
-    async def test_api_failure_requeues_the_speech(self, monkeypatch, chunk):
-        monkeypatch.setattr(
-            organizer,
-            "get_settings",
-            lambda: SimpleNamespace(
-                openai_api_key="test", openai_organizer_model="m"
-            ),
+        assert await organizer.summarize("s") is None
+        assert store.get("s").digest["revision"] == 0
+
+    async def test_api_failure_keeps_previous_digest(self, llm):
+        llm.raw = RuntimeError("openai down")
+        heard()
+
+        assert await organizer.summarize("s") is None
+        assert store.get("s").digest == {
+            "summary": "",
+            "points": [],
+            "revision": 0,
+        }
+
+
+class TestPointCoercion:
+    async def test_ids_derive_from_text(self, llm):
+        llm.raw = digest_of([{"text": "Guardar todo en Supabase", "author": "N"}])
+        heard()
+
+        d = await organizer.summarize("s")
+        assert d["points"][0]["id"] == point_id("Guardar todo en Supabase")
+
+    async def test_same_text_keeps_its_id_across_passes(self, llm):
+        """This is what stops the canvas from rebuilding a node a human moved."""
+        heard()
+        llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
+        first = await organizer.summarize("s")
+
+        llm.raw = digest_of(
+            [
+                {"text": "Usar Portal", "author": "N"},
+                {"text": "y dagre", "author": "I"},
+            ],
+            "dos",
         )
+        second = await organizer.summarize("s")
 
-        class Boom:
-            def __init__(self, **_):
-                self.chat = SimpleNamespace(completions=self)
+        assert first["points"][0]["id"] == second["points"][0]["id"]
 
-            async def create(self, **_):
-                raise RuntimeError("openai is down")
-
-        monkeypatch.setattr(organizer, "AsyncOpenAI", Boom)
-
-        spoken = [chunk(text="algo importante"), chunk(text="y algo mas")]
-        ready = await reconcile("s1", spoken)
-
-        assert ready == []
-        assert store.get("s1").pending == spoken
-
-
-class TestFieldCoercion:
-    @pytest.mark.asyncio
-    async def test_drops_intents_it_cannot_read(self, llm, chunk):
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {
-                        "id": None,
-                        "topic": "persistencia",
-                        "summary": "donde guardamos",
-                        "intents": [
-                            {"author": "Nico", "wants": "no guardar todo"},
-                            {"author": "", "wants": "algo"},
-                            {"wants": "sin autor"},
-                            "Ignacio quiere Supabase",
-                            None,
-                        ],
-                        "chunk_ids": [0],
-                    }
-                ]
-            }
+    async def test_duplicate_points_collapse(self, llm):
+        llm.raw = digest_of(
+            [
+                {"text": "Usar Portal", "author": "N"},
+                {"text": "usar   portal", "author": "I"},
+            ]
         )
-        await reconcile("s1", [chunk(text="donde guardamos la transcripcion")])
+        heard()
 
-        (t,) = store.get("s1").threads.values()
-        assert t["intents"] == [{"author": "Nico", "wants": "no guardar todo"}]
+        assert len((await organizer.summarize("s"))["points"]) == 1
 
-    @pytest.mark.asyncio
-    async def test_ignores_chunk_ids_out_of_range(self, llm, chunk):
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {
-                        "id": None,
-                        "topic": "t",
-                        "summary": "s",
-                        "chunk_ids": [0, 5, -1, "2", True, 1, 1],
-                    }
-                ]
-            }
+    async def test_caps_the_list(self, llm):
+        llm.raw = digest_of(
+            [{"text": f"idea numero {i}", "author": "N"} for i in range(40)]
         )
-        await reconcile("s1", [chunk(text="uno"), chunk(text="dos")])
+        heard()
 
-        (t,) = store.get("s1").threads.values()
-        assert [c["text"] for c in t["chunks"]] == ["uno", "dos"]
+        points = (await organizer.summarize("s"))["points"]
+        assert len(points) == organizer.MAX_POINTS
 
-    @pytest.mark.asyncio
-    async def test_a_thread_with_no_chunks_is_not_created(self, llm, chunk):
-        llm.raw = json.dumps(
-            {"threads": [{"id": None, "topic": "t", "chunk_ids": []}]}
+    async def test_empty_points_is_a_valid_answer(self, llm):
+        llm.raw = digest_of([], "todavia no dijeron nada")
+        heard()
+
+        d = await organizer.summarize("s")
+        assert d["points"] == []
+        assert d["revision"] == 1
+
+
+class TestChangeDetection:
+    async def test_identical_answer_does_not_redraw(self, llm):
+        heard()
+        llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "igual")
+        assert await organizer.summarize("s") is not None
+        # Same summary, same points: nothing for the board to do.
+        assert await organizer.summarize("s") is None
+        assert store.get("s").digest["revision"] == 1
+
+    async def test_new_point_bumps_the_revision(self, llm):
+        heard()
+        llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
+        await organizer.summarize("s")
+
+        llm.raw = digest_of(
+            [
+                {"text": "Usar Portal", "author": "N"},
+                {"text": "y dagre", "author": "I"},
+            ],
+            "uno",
         )
-        await reconcile("s1", [chunk(text="algo")])
-        assert store.get("s1").threads == {}
-
-    @pytest.mark.asyncio
-    async def test_blank_topic_does_not_erase_what_we_knew(self, llm, chunk):
-        store.upsert_thread("s1", thread(topic="persistencia", summary="ya se"))
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {"id": "th_1", "topic": "", "summary": None, "chunk_ids": [0]}
-                ]
-            }
-        )
-        await reconcile("s1", [chunk(text="mas sobre lo mismo")])
-
-        t = store.get("s1").threads["th_1"]
-        assert t["topic"] == "persistencia"
-        assert t["summary"] == "ya se"
+        assert (await organizer.summarize("s"))["revision"] == 2
 
 
-class TestSettling:
-    @pytest.mark.asyncio
-    async def test_does_not_settle_a_single_stray_sentence(self, llm, chunk):
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {
-                        "id": None,
-                        "topic": "algo",
-                        "summary": "s",
-                        "settled": True,
-                        "chunk_ids": [0],
-                    }
-                ]
-            }
-        )
-        ready = await reconcile("s1", [chunk(text="che una cosa")])
-        assert ready == []
+class TestContext:
+    async def test_model_sees_the_talk_and_its_own_last_summary(self, llm):
+        heard(author="Nico", text="propongo Supabase")
+        llm.raw = digest_of([{"text": "Supabase", "author": "Nico"}], "uno")
+        await organizer.summarize("s")
 
-    @pytest.mark.asyncio
-    async def test_settles_a_developed_thread(self, llm, chunk):
-        store.upsert_thread("s1", thread())
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {
-                        "id": "th_1",
-                        "topic": "persistencia",
-                        "summary": "guardamos el snapshot",
-                        "settled": True,
-                        "chunk_ids": [0],
-                    }
-                ]
-            }
-        )
-        ready = await reconcile("s1", [chunk(text="dale, cerramos con eso")])
+        heard(author="Ignacio", text="y el layout con dagre")
+        await organizer.summarize("s")
 
-        assert [t["id"] for t in ready] == ["th_1"]
-        assert store.get("s1").threads["th_1"]["status"] == "settled"
-
-    @pytest.mark.asyncio
-    async def test_never_settles_twice(self, llm, chunk):
-        store.upsert_thread("s1", thread(dispatched=True))
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {"id": "th_1", "settled": True, "chunk_ids": [0]}
-                ]
-            }
-        )
-        ready = await reconcile("s1", [chunk(text="algo mas")])
-        assert ready == []
-
-
-class TestThreadContinuity:
-    @pytest.mark.asyncio
-    async def test_revising_a_thread_keeps_its_history(self, llm, chunk):
-        store.upsert_thread("s1", thread(topic="viejo"))
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {
-                        "id": "th_1",
-                        "topic": "persistencia de la transcripcion",
-                        "summary": "ahora se entiende mejor",
-                        "chunk_ids": [0],
-                    }
-                ]
-            }
-        )
-        await reconcile("s1", [chunk(author="Ana", text="sumo esto")])
-
-        t = store.get("s1").threads["th_1"]
-        assert t["topic"] == "persistencia de la transcripcion"
-        assert len(t["chunks"]) == 3
-        assert t["participants"] == ["Ana", "Ignacio", "Nico"]
-
-    @pytest.mark.asyncio
-    async def test_unknown_thread_id_starts_a_new_thread(self, llm, chunk):
-        llm.raw = json.dumps(
-            {
-                "threads": [
-                    {"id": "th_ghost", "topic": "t", "chunk_ids": [0]}
-                ]
-            }
-        )
-        await reconcile("s1", [chunk(text="algo")])
-
-        (tid,) = store.get("s1").threads
-        assert tid != "th_ghost"
+        sent = json.loads(llm.last["messages"][1]["content"])
+        assert "Nico: propongo Supabase" in sent["conversacion"]
+        assert "Ignacio: y el layout con dagre" in sent["conversacion"]
+        assert sent["resumen_anterior"]["summary"] == "uno"
