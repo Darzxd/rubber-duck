@@ -19,6 +19,7 @@ import {
   emptyCells,
   hitTest,
   newId,
+  newPoll,
   type BoardElement,
   type Point,
 } from "./boardElements";
@@ -37,7 +38,7 @@ type WhiteboardProps = {
 const DRAWING_TOOLS: ToolId[] = ["pen", "shapes", "circle", "arrow", "text"];
 const NOTE_TOOLS: ToolId[] = ["idea", "decision", "task", "doubt"];
 /** Tools that drop a fixed-size thing where you click, instead of dragging. */
-const STAMP_TOOLS: ToolId[] = [...NOTE_TOOLS, "text", "table"];
+const STAMP_TOOLS: ToolId[] = [...NOTE_TOOLS, "text", "table", "poll"];
 
 const ZOOM_STEP = 10;
 const MIN_ZOOM = 30;
@@ -225,6 +226,22 @@ export default function Whiteboard({
         return;
       }
 
+      if (activeTool === "poll") {
+        const poll: BoardElement = {
+          kind: "poll",
+          id: newId(),
+          x: at.x,
+          y: at.y,
+          ...newPoll(),
+          ...style,
+        };
+        board.add(poll);
+        // Selected means editable, so it opens ready to type the question.
+        board.setSelectedIds([poll.id]);
+        setActiveTool("select");
+        return;
+      }
+
       const shared = { id: newId(), x: at.x, y: at.y, text: "", ...style };
       const element: BoardElement =
         activeTool === "text"
@@ -328,6 +345,55 @@ export default function Whiteboard({
     });
   }
 
+  /** Reads the poll, applies a change to it, and writes it back. */
+  function editPoll(
+    id: string,
+    change: (poll: Extract<BoardElement, { kind: "poll" }>) => BoardElement,
+    checkpoint = false,
+  ) {
+    const poll = board.elements.find((el) => el.id === id);
+    if (poll?.kind !== "poll") return;
+    if (checkpoint) board.checkpoint();
+    board.replace(id, change(poll));
+  }
+
+  function handleVote(id: string, option: number) {
+    editPoll(
+      id,
+      (poll) => ({
+        ...poll,
+        options: poll.options.map((entry, index) =>
+          index === option ? { ...entry, votes: entry.votes + 1 } : entry,
+        ),
+      }),
+      true,
+    );
+  }
+
+  function handleChangeQuestion(id: string, question: string) {
+    editPoll(id, (poll) => ({ ...poll, question }));
+  }
+
+  function handleChangeOption(id: string, option: number, label: string) {
+    editPoll(id, (poll) => ({
+      ...poll,
+      options: poll.options.map((entry, index) =>
+        index === option ? { ...entry, label } : entry,
+      ),
+    }));
+  }
+
+  function handleAddOption(id: string) {
+    editPoll(
+      id,
+      (poll) => ({
+        ...poll,
+        options: [...poll.options, { label: "", votes: 0 }],
+      }),
+      true,
+    );
+  }
+
   function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -358,17 +424,22 @@ export default function Whiteboard({
   // Keyboard shortcuts act on the selection, the way every editor behaves.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      // Escape is the way out of an editor, so it works even while typing.
+      if (event.key === "Escape") {
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        board.setSelectedIds([]);
+        setEditingId(null);
+        setEditingCell(null);
+        return;
+      }
+
       if (isTypingTarget(event.target)) return;
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         board.selectAll();
-        return;
-      }
-      if (event.key === "Escape") {
-        board.setSelectedIds([]);
-        setEditingId(null);
-        setEditingCell(null);
         return;
       }
       if (event.key !== "Delete" && event.key !== "Backspace") return;
@@ -479,6 +550,10 @@ export default function Whiteboard({
               onFinishEditing={stopEditing}
               onAddRow={handleAddRow}
               onAddColumn={handleAddColumn}
+              onVote={handleVote}
+              onChangeQuestion={handleChangeQuestion}
+              onChangeOption={handleChangeOption}
+              onAddOption={handleAddOption}
             />
 
             {authors.map((author) => (

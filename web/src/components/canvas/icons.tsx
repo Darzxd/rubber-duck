@@ -380,3 +380,10 @@ export const SelectAllIcon = ({ className }: IconProps) => (
     <rect x="8.4" y="8.4" width="7.2" height="7.2" rx="1.2" fill="currentColor" />
   </svg>
 );
+
+export const PollIcon = ({ className }: IconProps) => (
+  <Line
+    d="M6.4 19.5v-6.2M12 19.5V6.4M17.6 19.5v-9.4M4.4 21.5h15.2"
+    className={className}
+  />
+);

@@ -32,6 +32,13 @@ export type BoardElement =
       src: string;
     })
   | (Base & {
+      kind: "poll";
+      x: number;
+      y: number;
+      question: string;
+      options: { label: string; votes: number }[];
+    })
+  | (Base & {
       kind: "table";
       x: number;
       y: number;
@@ -85,7 +92,29 @@ export function boundsOf(element: BoardElement): BoundingBox {
         w: (element.cells[0]?.length ?? 0) * element.cellW,
         h: element.cells.length * element.cellH,
       };
+    case "poll":
+      return {
+        x: element.x,
+        y: element.y,
+        w: POLL_WIDTH,
+        h: POLL_HEADER + element.options.length * POLL_ROW + POLL_FOOTER,
+      };
   }
+}
+
+export const POLL_WIDTH = 244;
+export const POLL_HEADER = 46;
+export const POLL_ROW = 38;
+export const POLL_FOOTER = 14;
+
+export function newPoll() {
+  return {
+    question: "",
+    options: [
+      { label: "", votes: 0 },
+      { label: "", votes: 0 },
+    ],
+  };
 }
 
 export const TABLE_DEFAULTS = { cols: 3, rows: 3, cellW: 116, cellH: 34 };

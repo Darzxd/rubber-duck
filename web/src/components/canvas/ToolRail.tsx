@@ -9,6 +9,7 @@ import {
   MicIcon,
   PenIcon,
   PlusIcon,
+  PollIcon,
   RedoIcon,
   SelectIcon,
   ShapesIcon,
@@ -33,7 +34,8 @@ export type ToolId =
   | "idea"
   | "decision"
   | "task"
-  | "doubt";
+  | "doubt"
+  | "poll";
 
 export type AiActionId = "capture" | "organise" | "summarise";
 
@@ -67,6 +69,7 @@ const THINK: {
   { id: "decision", label: "Decisión", Icon: DecisionIcon, tint: "bg-emerald-50 text-emerald-500 dark:bg-emerald-500/15" },
   { id: "task", label: "Tarea", Icon: TaskTrendIcon, tint: "bg-blue-50 text-blue-500 dark:bg-blue-500/15" },
   { id: "doubt", label: "Duda", Icon: DoubtIcon, tint: "bg-violet-50 text-violet-500 dark:bg-violet-500/15" },
+  { id: "poll", label: "Votación", Icon: PollIcon, tint: "bg-rose-50 text-rose-500 dark:bg-rose-500/15" },
 ];
 
 const AI: { id: AiActionId; label: string; Icon: typeof MicIcon }[] = [
