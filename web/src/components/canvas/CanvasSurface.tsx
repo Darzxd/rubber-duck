@@ -234,6 +234,9 @@ export default function CanvasSurface({
         backgroundImage: `radial-gradient(circle, ${
           isDark ? "#2b2b31" : "#d7d7de"
         } 1.1px, transparent 1.1px)`,
+        // Declarative because it follows zoom, which is React state. Leaving it
+        // to the imperative paint meant no grid at all until the first nudge.
+        backgroundSize: `${GRID * (zoom / 100)}px ${GRID * (zoom / 100)}px`,
       }}
     >
       {/* Everything in here rides the pan and the zoom. */}
