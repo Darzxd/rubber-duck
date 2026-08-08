@@ -346,3 +346,14 @@ export const RobotIcon = ({ className }: IconProps) => (
     <path d="M9.6 16h4.8" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" />
   </svg>
 );
+
+export const ChevronRight = ({ className }: IconProps) => (
+  <Line d="M9.5 6 15 12l-5.5 6" className={className ?? "size-4"} />
+);
+
+export const PanelRightIcon = ({ className }: IconProps) => (
+  <Line
+    d="M4.5 6.6a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v10.8a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2zM14.2 4.6v14.8"
+    className={className ?? "size-4"}
+  />
+);

@@ -11,6 +11,7 @@ import ToolRail, { type ToolId } from "./ToolRail";
 import TopBar from "./TopBar";
 import ZoomBar from "./ZoomBar";
 import { SAMPLE_AUTHORS, type Author } from "./authors";
+import { PanelRightIcon } from "./icons";
 import { SAMPLE_AGENTS } from "./panelData";
 
 type WhiteboardProps = {
@@ -41,6 +42,7 @@ export default function Whiteboard({
   const [opacity, setOpacity] = useState(100);
   const [zoom, setZoom] = useState(100);
   const [resetSignal, setResetSignal] = useState(0);
+  const [showSidePanel, setShowSidePanel] = useState(true);
 
   function handleSelectTool(tool: ToolId) {
     setActiveTool(tool);
@@ -55,6 +57,19 @@ export default function Whiteboard({
   const overlay = (
     <>
       <ToolRail activeTool={activeTool} onSelectTool={handleSelectTool} />
+
+      {/* Only offered where the panel can actually show: it is desktop-only. */}
+      {showSidePanel ? null : (
+        <button
+          type="button"
+          onClick={() => setShowSidePanel(true)}
+          title="Mostrar panel de agentes"
+          aria-label="Mostrar panel de agentes"
+          className="pointer-events-auto absolute right-3 top-3 z-30 hidden size-9 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-lg shadow-neutral-900/5 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 lg:grid dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        >
+          <PanelRightIcon />
+        </button>
+      )}
 
       {showColorPanel ? (
         <ColorPanel
@@ -114,7 +129,9 @@ export default function Whiteboard({
             ))}
           </CanvasSurface>
 
-          <SidePanel />
+          {showSidePanel ? (
+            <SidePanel onHide={() => setShowSidePanel(false)} />
+          ) : null}
         </div>
       </div>
     </div>
