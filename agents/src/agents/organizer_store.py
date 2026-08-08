@@ -1,15 +1,23 @@
 import time
 from dataclasses import dataclass, field
 
-from agents.state import Digest, TranscriptChunk
+from agents.state import Digest, Notepad, TranscriptChunk
 
 # How much speech the Organizer gets to look at. Enough to keep the thread of
 # the conversation, short enough that the call stays inside the 3s budget.
 CONTEXT_CHUNKS = 40
 
+# A brief steers a meeting, it is not a document. Past this it stops fitting in
+# every prompt that has to carry it.
+MAX_BRIEF = 600
+
 
 def empty_digest() -> Digest:
     return {"summary": "", "points": [], "revision": 0}
+
+
+def empty_notepad() -> Notepad:
+    return {"notes": [], "revision": 0}
 
 
 @dataclass
@@ -20,6 +28,11 @@ class SessionState:
     pending: list[TranscriptChunk] = field(default_factory=list)
     transcript: list[TranscriptChunk] = field(default_factory=list)
     digest: Digest = field(default_factory=empty_digest)
+    # What the room said it was here to do, written before anybody spoke. Every
+    # agent that has to decide what matters reads it; without it they can only
+    # guess at the point of the meeting.
+    brief: str = ""
+    notepad: Notepad = field(default_factory=empty_notepad)
     last_chunk_at: float = 0.0
     last_summarized: float = 0.0
 
@@ -59,3 +72,13 @@ def set_digest(session_id: str, digest: Digest) -> None:
     s = get(session_id)
     s.digest = digest
     s.last_summarized = time.time()
+
+
+def set_brief(session_id: str, brief: str) -> str:
+    s = get(session_id)
+    s.brief = " ".join(brief.split())[:MAX_BRIEF]
+    return s.brief
+
+
+def set_notepad(session_id: str, notepad: Notepad) -> None:
+    get(session_id).notepad = notepad
