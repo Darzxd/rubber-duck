@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import ColorPalette from "./ColorPalette";
 import {
   CORNER_RADII,
   OPACITIES,
@@ -67,8 +71,13 @@ export default function StyleBar({
   onOpacityChange,
   editingSelection = false,
 }: StyleBarProps) {
+  const [isPaletteOpen, setPaletteOpen] = useState(false);
+
   return (
-    <div className="pointer-events-auto absolute left-1/2 top-3 z-30 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 overflow-x-auto rounded-full border border-neutral-200 bg-white/95 px-2.5 py-1.5 shadow-xl shadow-neutral-900/10 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
+    <div className="pointer-events-auto absolute left-1/2 top-3 z-30 max-w-[calc(100%-1.5rem)] -translate-x-1/2">
+      {/* The row scrolls on narrow screens; the palette must live outside it,
+          or it gets clipped the way the shape picker was. */}
+      <div className="no-scrollbar flex items-center gap-2 overflow-x-auto rounded-full border border-neutral-200 bg-white/95 px-2.5 py-1.5 shadow-xl shadow-neutral-900/10 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
       {editingSelection ? (
         <span className="shrink-0 pl-0.5 pr-1 text-[0.65rem] font-semibold uppercase tracking-wide text-neutral-400">
           Selección
@@ -94,6 +103,22 @@ export default function StyleBar({
             ) : null}
           </button>
         ))}
+        <button
+          type="button"
+          title="Más colores"
+          aria-label="Más colores"
+          aria-expanded={isPaletteOpen}
+          onClick={() => setPaletteOpen((open) => !open)}
+          className={`grid h-7 w-5 place-items-center rounded-md border border-dashed transition-colors ${
+            isPaletteOpen
+              ? "border-neutral-900 text-neutral-900 dark:border-white dark:text-white"
+              : "border-neutral-300 text-neutral-400 hover:border-neutral-900 hover:text-neutral-900 dark:border-neutral-600 dark:hover:border-white dark:hover:text-white"
+          }`}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true" className="size-3">
+            <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       <span className={DIVIDER} />
@@ -197,7 +222,20 @@ export default function StyleBar({
             />
           </button>
         ))}
+        </div>
       </div>
+
+      {isPaletteOpen ? (
+        <div className="absolute left-1/2 top-full z-40 mt-2 -translate-x-1/2">
+          <ColorPalette
+            color={color}
+            onPick={(picked) => {
+              onColorChange(picked);
+              setPaletteOpen(false);
+            }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
