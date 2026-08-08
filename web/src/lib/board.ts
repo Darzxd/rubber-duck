@@ -2,22 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type BoardNode = {
-  id: string;
-  label: string;
-  author?: string;
-};
-
-export type BoardEdge = {
-  source: string;
-  target: string;
-  label?: string;
-};
+import type { BoardElement } from "@/components/canvas/boardElements";
 
 export type Board = {
   revision: number;
-  nodes: BoardNode[];
-  edges: BoardEdge[];
+  elements: BoardElement[];
 };
 
 export type NoteKind = "idea" | "decision" | "pregunta" | "pendiente";
@@ -35,22 +24,35 @@ export type Note = {
 const AGENTS_URL =
   process.env.NEXT_PUBLIC_AGENTS_URL ?? "http://localhost:8000";
 
-const EMPTY: Board = { revision: 0, nodes: [], edges: [] };
+const EMPTY: Board = { revision: 0, elements: [] };
 
 const KINDS: NoteKind[] = ["idea", "decision", "pregunta", "pendiente"];
 
 type Payload = { event: string; content: Record<string, unknown> };
 
-function isNode(v: unknown): v is BoardNode {
-  if (typeof v !== "object" || v === null) return false;
-  const n = v as Record<string, unknown>;
-  return typeof n.id === "string" && typeof n.label === "string";
-}
+// What each kind of element needs on top of the common style fields. An
+// element missing one of these would render as a hole in the board, so it
+// never gets there — the renderer is Nico's and assumes they are present.
+const SHAPE: Record<string, string[]> = {
+  path: ["points"],
+  rect: ["x", "y", "w", "h"],
+  ellipse: ["x", "y", "w", "h"],
+  triangle: ["x", "y", "w", "h"],
+  arrow: ["x1", "y1", "x2", "y2"],
+  text: ["x", "y", "text"],
+  note: ["x", "y", "text", "tag", "tone"],
+  image: ["x", "y", "w", "h", "src"],
+  poll: ["x", "y", "question", "options"],
+  table: ["x", "y", "cells", "cellW", "cellH"],
+};
 
-function isEdge(v: unknown): v is BoardEdge {
+function isElement(v: unknown): v is BoardElement {
   if (typeof v !== "object" || v === null) return false;
   const e = v as Record<string, unknown>;
-  return typeof e.source === "string" && typeof e.target === "string";
+  if (typeof e.id !== "string" || typeof e.color !== "string") return false;
+  if (typeof e.width !== "number" || typeof e.opacity !== "number") return false;
+  const needs = SHAPE[e.kind as string];
+  return Array.isArray(needs) && needs.every((key) => e[key] !== undefined);
 }
 
 function isNote(v: unknown): v is Note {
@@ -97,6 +99,21 @@ export function useSessionStream(sessionId: string): SessionStream {
       .then((data: Record<string, unknown>) => {
         if (!live) return;
         if (typeof data.brief === "string") setBrief(data.brief);
+
+        const drawing = data.board as Record<string, unknown> | undefined;
+        if (
+          drawing &&
+          Array.isArray(drawing.elements) &&
+          typeof drawing.revision === "number" &&
+          drawing.revision >= drawn.current
+        ) {
+          drawn.current = drawing.revision;
+          setBoard({
+            revision: drawing.revision,
+            elements: drawing.elements.filter(isElement),
+          });
+        }
+
         const pad = data.notepad as Record<string, unknown> | undefined;
         if (!pad || !Array.isArray(pad.notes)) return;
         if (typeof pad.revision !== "number") return;
@@ -122,7 +139,7 @@ export function useSessionStream(sessionId: string): SessionStream {
       } catch {
         return;
       }
-      const { revision, nodes, edges, notes: pad, brief: text } = payload.content;
+      const { revision, elements, notes: pad, brief: text } = payload.content;
 
       if (payload.event === "session.brief") {
         if (typeof text === "string") setBrief(text);
@@ -131,13 +148,9 @@ export function useSessionStream(sessionId: string): SessionStream {
 
       if (payload.event === "architect.draw") {
         if (typeof revision !== "number" || revision < drawn.current) return;
-        if (!Array.isArray(nodes)) return;
+        if (!Array.isArray(elements)) return;
         drawn.current = revision;
-        setBoard({
-          revision,
-          nodes: nodes.filter(isNode),
-          edges: Array.isArray(edges) ? edges.filter(isEdge) : [],
-        });
+        setBoard({ revision, elements: elements.filter(isElement) });
         return;
       }
 

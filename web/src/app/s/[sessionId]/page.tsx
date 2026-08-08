@@ -6,7 +6,7 @@ import { PortalProvider } from "@portalsdk/react";
 import AgentRail from "@/components/agents/AgentRail";
 import BriefCard from "@/components/agents/BriefCard";
 import NotetakerPanel from "@/components/agents/NotetakerPanel";
-import BoardGraph from "@/components/canvas/BoardGraph";
+import ArchitectBoard from "@/components/agents/ArchitectBoard";
 import Whiteboard from "@/components/canvas/Whiteboard";
 import type { Author } from "@/components/canvas/authors";
 import TranscriptOverlay from "@/components/debug/TranscriptOverlay";
@@ -73,7 +73,7 @@ function BoardView({
         authors={people}
         onShare={onOpenShareModal}
       >
-        <BoardGraph board={board} />
+        <ArchitectBoard board={board} />
       </Whiteboard>
       <AgentRail>
         <BriefCard
