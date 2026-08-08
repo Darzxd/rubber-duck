@@ -5,6 +5,7 @@ import {
   POLL_WIDTH,
   arrowHead,
   boundsOf,
+  dashArray,
   pathData,
   type BoardElement,
 } from "./boardElements";
@@ -35,6 +36,7 @@ function Shape({ element }: { element: BoardElement }) {
     strokeWidth: element.width,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
+    strokeDasharray: dashArray(element.dash, element.width),
     opacity: element.opacity / 100,
     fill: "none",
   };
@@ -49,10 +51,19 @@ function Shape({ element }: { element: BoardElement }) {
           y={element.y}
           width={element.w}
           height={element.h}
-          rx={6}
+          rx={element.radius}
           {...stroke}
         />
       );
+    case "triangle": {
+      const { x, y, w, h } = element;
+      return (
+        <polygon
+          points={`${x + w / 2},${y} ${x + w},${y + h} ${x},${y + h}`}
+          {...stroke}
+        />
+      );
+    }
     case "ellipse":
       return (
         <ellipse

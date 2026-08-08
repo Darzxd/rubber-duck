@@ -387,3 +387,14 @@ export const PollIcon = ({ className }: IconProps) => (
     className={className}
   />
 );
+
+export const RectToolIcon = ({ className }: IconProps) => (
+  <Line
+    d="M4.4 6.6a2.2 2.2 0 0 1 2.2-2.2h10.8a2.2 2.2 0 0 1 2.2 2.2v10.8a2.2 2.2 0 0 1-2.2 2.2H6.6a2.2 2.2 0 0 1-2.2-2.2z"
+    className={className}
+  />
+);
+
+export const TriangleToolIcon = ({ className }: IconProps) => (
+  <Line d="M12 4.4 20.2 19.6H3.8z" className={className} />
+);

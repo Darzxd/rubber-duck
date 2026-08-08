@@ -4,10 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import ActionBar from "./ActionBar";
 import BoardLayer, { type CellRef } from "./BoardLayer";
 import CanvasSurface, { type CanvasApi } from "./CanvasSurface";
-import ColorBar from "./ColorBar";
+import StyleBar from "./StyleBar";
 import SidePanel from "./SidePanel";
 import ThemeSwitch from "./ThemeSwitch";
-import ToolRail, { type ToolId } from "./ToolRail";
+import ToolRail, { type ShapeKind, type ToolId } from "./ToolRail";
 import TopBar from "./TopBar";
 import ZoomBar from "./ZoomBar";
 import type { Author } from "./authors";
@@ -21,6 +21,7 @@ import {
   newPoll,
   type BoardElement,
   type Point,
+  type StrokeStyle,
 } from "./boardElements";
 import { PanelRightIcon } from "./icons";
 import { SAMPLE_AGENTS } from "./panelData";
@@ -34,7 +35,7 @@ type WhiteboardProps = {
 };
 
 /** Tools that put ink on the board, and so bring the colour bar along. */
-const DRAWING_TOOLS: ToolId[] = ["pen", "shapes", "circle", "arrow", "text"];
+const DRAWING_TOOLS: ToolId[] = ["pen", "shape", "arrow", "text"];
 const NOTE_TOOLS: ToolId[] = ["idea", "decision", "task", "doubt"];
 /** Tools that drop a fixed-size thing where you click, instead of dragging. */
 const STAMP_TOOLS: ToolId[] = [...NOTE_TOOLS, "text", "table", "poll"];
@@ -73,6 +74,10 @@ export default function Whiteboard({
   const [isDark, setIsDark] = useState(false);
   const [color, setColor] = useState("#111111");
   const [strokeSize, setStrokeSize] = useState(4);
+  const [dash, setDash] = useState<StrokeStyle>("solid");
+  const [radius, setRadius] = useState(8);
+  const [opacity, setOpacity] = useState(100);
+  const [shapeKind, setShapeKind] = useState<ShapeKind>("rect");
   const [zoom, setZoom] = useState(100);
   const [resetSignal, setResetSignal] = useState(0);
   const [showSidePanel, setShowSidePanel] = useState(true);
@@ -88,8 +93,7 @@ export default function Whiteboard({
   /** Cell to open on release: focusing it now lets pointerup steal the focus. */
   const pendingCell = useRef<CellRef | null>(null);
 
-  const opacity = 100;
-  const style = { color, width: strokeSize, opacity };
+  const style = { color, width: strokeSize, opacity, dash, radius };
 
   function stopEditing() {
     // A text box left empty is invisible but still selectable, so it would
@@ -121,18 +125,34 @@ export default function Whiteboard({
   /** The bar edits the selection when there is one, otherwise the next stroke. */
   function handleColorChange(next: string) {
     setColor(next);
-    if (board.selectedIds.length > 0) {
-      board.checkpoint();
-      board.patch(board.selectedIds, { color: next });
-    }
+    applyToSelection({ color: next });
   }
 
   function handleStrokeSizeChange(next: number) {
     setStrokeSize(next);
-    if (board.selectedIds.length > 0) {
-      board.checkpoint();
-      board.patch(board.selectedIds, { width: next });
-    }
+    applyToSelection({ width: next });
+  }
+
+  /** Every style control does the same thing: remember it, and repaint any selection. */
+  function applyToSelection(next: Partial<BoardElement>) {
+    if (board.selectedIds.length === 0) return;
+    board.checkpoint();
+    board.patch(board.selectedIds, next);
+  }
+
+  function handleDashChange(next: StrokeStyle) {
+    setDash(next);
+    applyToSelection({ dash: next });
+  }
+
+  function handleRadiusChange(next: number) {
+    setRadius(next);
+    applyToSelection({ radius: next });
+  }
+
+  function handleOpacityChange(next: number) {
+    setOpacity(next);
+    applyToSelection({ opacity: next });
   }
 
   function handleDrawStart(point: Point, event: React.PointerEvent) {
@@ -186,7 +206,11 @@ export default function Whiteboard({
       if (current.kind === "path") {
         return { ...current, points: [...current.points, point] };
       }
-      if (current.kind === "rect" || current.kind === "ellipse") {
+      if (
+        current.kind === "rect" ||
+        current.kind === "ellipse" ||
+        current.kind === "triangle"
+      ) {
         return {
           ...current,
           w: point.x - origin.current.x,
@@ -269,7 +293,7 @@ export default function Whiteboard({
       setDraft(null);
       return;
     }
-    if (draft.kind === "rect" || draft.kind === "ellipse") {
+    if (draft.kind === "rect" || draft.kind === "ellipse" || draft.kind === "triangle") {
       const box = normalise(draft);
       if (box.w < 4 || box.h < 4) {
         setDraft(null);
@@ -296,9 +320,9 @@ export default function Whiteboard({
       setDraft({ kind: "path", id: newId(), points: [point], ...style });
       return;
     }
-    if (activeTool === "shapes" || activeTool === "circle") {
+    if (activeTool === "shape") {
       setDraft({
-        kind: activeTool === "shapes" ? "rect" : "ellipse",
+        kind: shapeKind,
         id: newId(),
         x: point.x,
         y: point.y,
@@ -463,11 +487,16 @@ export default function Whiteboard({
   const selected = board.elements.find((el) =>
     board.selectedIds.includes(el.id),
   );
-  // With something selected the bar shows that element's colour, so the marker
-  // always sits on the chip the user is actually looking at.
-  const selectedColor = selected?.color ?? color;
-  const selectedWidth = selected?.width ?? strokeSize;
-  const showColorBar =
+  // With something selected the bar reflects that element, so every marker sits
+  // on the option the user is actually looking at.
+  const live = {
+    color: selected?.color ?? color,
+    width: selected?.width ?? strokeSize,
+    dash: selected?.dash ?? dash,
+    radius: selected?.radius ?? radius,
+    opacity: selected?.opacity ?? opacity,
+  };
+  const showStyleBar =
     board.selectedIds.length > 0 ||
     DRAWING_TOOLS.includes(activeTool) ||
     NOTE_TOOLS.includes(activeTool);
@@ -477,6 +506,8 @@ export default function Whiteboard({
       <ToolRail
         activeTool={activeTool}
         onSelectTool={handleSelectTool}
+        shapeKind={shapeKind}
+        onShapeKindChange={setShapeKind}
         onUndo={board.undo}
         onRedo={board.redo}
         onSelectAll={board.selectAll}
@@ -495,12 +526,18 @@ export default function Whiteboard({
         </button>
       )}
 
-      {showColorBar ? (
-        <ColorBar
-          color={selectedColor}
+      {showStyleBar ? (
+        <StyleBar
+          color={live.color}
           onColorChange={handleColorChange}
-          strokeSize={selectedWidth}
-          onStrokeSizeChange={handleStrokeSizeChange}
+          width={live.width}
+          onWidthChange={handleStrokeSizeChange}
+          dash={live.dash}
+          onDashChange={handleDashChange}
+          radius={live.radius}
+          onRadiusChange={handleRadiusChange}
+          opacity={live.opacity}
+          onOpacityChange={handleOpacityChange}
           editingSelection={board.selectedIds.length > 0}
         />
       ) : null}

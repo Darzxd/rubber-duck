@@ -10,23 +10,26 @@ import {
   PenIcon,
   PlusIcon,
   PollIcon,
+  RectToolIcon,
   RedoIcon,
   SelectIcon,
-  ShapesIcon,
   SelectAllIcon,
   SparkleIcon,
   TableIcon,
   TaskTrendIcon,
   TextIcon,
+  TriangleToolIcon,
   UndoIcon,
 } from "./icons";
+
+/** The three shapes that share one slot on the rail. */
+export type ShapeKind = "rect" | "ellipse" | "triangle";
 
 export type ToolId =
   | "select"
   | "text"
   | "pen"
-  | "shapes"
-  | "circle"
+  | "shape"
   | "arrow"
   | "image"
   | "table"
@@ -42,6 +45,8 @@ export type AiActionId = "capture" | "organise" | "summarise";
 type ToolRailProps = {
   activeTool: ToolId;
   onSelectTool: (tool: ToolId) => void;
+  shapeKind: ShapeKind;
+  onShapeKindChange: (kind: ShapeKind) => void;
   onAiAction?: (action: AiActionId) => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -52,11 +57,15 @@ const BUILD: { id: ToolId; label: string; Icon: typeof SelectIcon }[] = [
   { id: "select", label: "Seleccionar", Icon: SelectIcon },
   { id: "text", label: "Texto", Icon: TextIcon },
   { id: "pen", label: "Lápiz", Icon: PenIcon },
-  { id: "shapes", label: "Formas", Icon: ShapesIcon },
-  { id: "circle", label: "Círculo", Icon: CircleToolIcon },
   { id: "arrow", label: "Flecha", Icon: ArrowToolIcon },
   { id: "table", label: "Tabla", Icon: TableIcon },
   { id: "image", label: "Imagen", Icon: ImageIcon },
+];
+
+const SHAPES: { kind: ShapeKind; label: string; Icon: typeof SelectIcon }[] = [
+  { kind: "rect", label: "Rectángulo", Icon: RectToolIcon },
+  { kind: "ellipse", label: "Círculo", Icon: CircleToolIcon },
+  { kind: "triangle", label: "Triángulo", Icon: TriangleToolIcon },
 ];
 
 const THINK: {
@@ -84,15 +93,25 @@ const SECTION_LABEL =
   "px-1 pb-1.5 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-neutral-400";
 const ROW =
   "flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-[0.72rem] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
+const TOOL =
+  "grid size-9 place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
+const TOOL_ON = "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900";
+const TOOL_OFF =
+  "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800";
 
 export default function ToolRail({
   activeTool,
   onSelectTool,
+  shapeKind,
+  onShapeKindChange,
   onAiAction,
   onUndo,
   onRedo,
   onSelectAll,
 }: ToolRailProps) {
+  const ActiveShapeIcon =
+    SHAPES.find((shape) => shape.kind === shapeKind)?.Icon ?? RectToolIcon;
+
   return (
     <div className="no-scrollbar pointer-events-auto absolute left-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-[6.5rem] flex-col gap-2 overflow-y-auto">
       <div className={CARD}>
@@ -106,7 +125,7 @@ export default function ToolRail({
         </button>
       </div>
 
-      <div className={CARD}>
+      <div className={`${CARD} relative`}>
         <p className={SECTION_LABEL}>Construir</p>
         <div className="grid grid-cols-2 gap-1">
           {BUILD.map(({ id, label, Icon }) => (
@@ -117,16 +136,48 @@ export default function ToolRail({
               aria-label={label}
               aria-pressed={activeTool === id}
               onClick={() => onSelectTool(id)}
-              className={`grid size-9 place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 ${
-                activeTool === id
-                  ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                  : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-              }`}
+              className={`${TOOL} ${activeTool === id ? TOOL_ON : TOOL_OFF}`}
             >
               <Icon />
             </button>
           ))}
+
+          {/* The three shapes share one slot; the icon shows the active one. */}
+          <button
+            type="button"
+            title="Formas"
+            aria-label="Formas"
+            aria-pressed={activeTool === "shape"}
+            onClick={() => onSelectTool("shape")}
+            className={`${TOOL} relative ${
+              activeTool === "shape" ? TOOL_ON : TOOL_OFF
+            }`}
+          >
+            <ActiveShapeIcon />
+            <span
+              aria-hidden="true"
+              className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-current opacity-50"
+            />
+          </button>
         </div>
+
+        {activeTool === "shape" ? (
+          <div className="absolute left-full top-1/2 z-40 ml-2 flex -translate-y-1/2 items-center gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-xl shadow-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900">
+            {SHAPES.map(({ kind, label, Icon }) => (
+              <button
+                key={kind}
+                type="button"
+                title={label}
+                aria-label={label}
+                aria-pressed={shapeKind === kind}
+                onClick={() => onShapeKindChange(kind)}
+                className={`${TOOL} ${shapeKind === kind ? TOOL_ON : TOOL_OFF}`}
+              >
+                <Icon />
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className={CARD}>

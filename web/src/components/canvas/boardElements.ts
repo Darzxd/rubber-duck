@@ -2,17 +2,35 @@ import type { StickyTone } from "./StickyNote";
 
 export type Point = { x: number; y: number };
 
+export type StrokeStyle = "solid" | "dashed" | "dotted";
+
 type Base = {
   id: string;
   color: string;
   width: number;
   opacity: number;
+  dash: StrokeStyle;
+  /** Corner rounding in px; only the boxy shapes use it. */
+  radius: number;
 };
+
+/** Turns a stroke style into an SVG dash pattern scaled to the line width. */
+export function dashArray(style: StrokeStyle, width: number) {
+  if (style === "dashed") return `${width * 3} ${width * 2.2}`;
+  // A zero-length dash with a round cap draws a dot.
+  if (style === "dotted") return `0 ${width * 2.2}`;
+  return undefined;
+}
+
+export const STROKE_STYLES: StrokeStyle[] = ["solid", "dashed", "dotted"];
+export const CORNER_RADII = [0, 8, 20];
+export const OPACITIES = [100, 60, 30];
 
 export type BoardElement =
   | (Base & { kind: "path"; points: Point[] })
   | (Base & { kind: "rect"; x: number; y: number; w: number; h: number })
   | (Base & { kind: "ellipse"; x: number; y: number; w: number; h: number })
+  | (Base & { kind: "triangle"; x: number; y: number; w: number; h: number })
   | (Base & { kind: "arrow"; x1: number; y1: number; x2: number; y2: number })
   | (Base & { kind: "text"; x: number; y: number; text: string })
   | (Base & {
@@ -72,6 +90,7 @@ export function boundsOf(element: BoardElement): BoundingBox {
     }
     case "rect":
     case "ellipse":
+    case "triangle":
     case "image":
       return { x: element.x, y: element.y, w: element.w, h: element.h };
     case "arrow":
