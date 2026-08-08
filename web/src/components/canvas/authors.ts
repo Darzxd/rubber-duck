@@ -28,11 +28,7 @@ export function colorForAuthor(id: string): string {
   return AUTHOR_COLORS[Math.abs(hash) % AUTHOR_COLORS.length];
 }
 
-/** Stand-in presence until the session layer feeds real cursors in. */
-export const SAMPLE_AUTHORS: Author[] = [
-  { id: "ana", name: "Ana", color: AUTHOR_COLORS[0], x: 26, y: 62 },
-  { id: "beto", name: "Beto", color: AUTHOR_COLORS[1], x: 44, y: 47 },
-  { id: "caro", name: "Caro", color: AUTHOR_COLORS[2], x: 71, y: 38 },
-  { id: "dani", name: "Dani", color: AUTHOR_COLORS[3], x: 58, y: 57 },
-  { id: "eli", name: "Eli", color: AUTHOR_COLORS[4], x: 76, y: 71 },
-];
+/**
+ * There is deliberately no sample roster here. Presence must come from the
+ * session layer: a face or a cursor on screen always means a real person.
+ */

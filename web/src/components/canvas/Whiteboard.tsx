@@ -10,7 +10,7 @@ import ThemeSwitch from "./ThemeSwitch";
 import ToolRail, { type ToolId } from "./ToolRail";
 import TopBar from "./TopBar";
 import ZoomBar from "./ZoomBar";
-import { SAMPLE_AUTHORS, type Author } from "./authors";
+import type { Author } from "./authors";
 import {
   NOTE_PRESETS,
   TABLE_DEFAULTS,
@@ -64,7 +64,8 @@ function normalise(box: { x: number; y: number; w: number; h: number }) {
 
 export default function Whiteboard({
   sessionName,
-  authors = SAMPLE_AUTHORS,
+  // Empty until the session layer passes real participants.
+  authors = [],
   onShare,
   children,
 }: WhiteboardProps) {
