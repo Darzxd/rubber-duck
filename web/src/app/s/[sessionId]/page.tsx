@@ -41,11 +41,13 @@ function BoardView({
   sessionId,
   name,
   showShareModal,
+  onOpenShareModal,
   onCloseShareModal,
 }: {
   sessionId: string;
   name: string;
   showShareModal: boolean;
+  onOpenShareModal: () => void;
   onCloseShareModal: () => void;
 }) {
   const { supported, recording, interim, chunks, error } = useSession({
@@ -56,7 +58,10 @@ function BoardView({
 
   return (
     <>
-      <Whiteboard sessionName={`Pizarra ${sessionId}`}>
+      <Whiteboard
+        sessionName={`Pizarra ${sessionId}`}
+        onShare={onOpenShareModal}
+      >
         <InviteChip sessionId={sessionId} />
         {nodes.map((node, i) => (
           <AgentNode key={node.id} node={node} index={i} />
@@ -99,6 +104,7 @@ function SessionInner({ sessionId }: { sessionId: string }) {
       sessionId={sessionId}
       name={name}
       showShareModal={showShareModal}
+      onOpenShareModal={() => setShowShareModal(true)}
       onCloseShareModal={closeShareModal}
     />
   );
