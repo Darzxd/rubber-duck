@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import ActionBar from "./ActionBar";
 import BoardLayer from "./BoardLayer";
 import CanvasSurface, { type CanvasApi } from "./CanvasSurface";
-import ColorPanel from "./ColorPanel";
+import ColorBar from "./ColorBar";
 import PresenceCursor from "./PresenceCursor";
 import SidePanel from "./SidePanel";
 import ThemeSwitch from "./ThemeSwitch";
@@ -65,10 +65,9 @@ export default function Whiteboard({
 }: WhiteboardProps) {
   const [activeTool, setActiveTool] = useState<ToolId>("select");
   const [isDark, setIsDark] = useState(false);
-  const [showColorPanel, setShowColorPanel] = useState(false);
   const [color, setColor] = useState("#111111");
   const [strokeSize, setStrokeSize] = useState(4);
-  const [opacity, setOpacity] = useState(100);
+  const opacity = 100;
   const [zoom, setZoom] = useState(100);
   const [resetSignal, setResetSignal] = useState(0);
   const [showSidePanel, setShowSidePanel] = useState(true);
@@ -90,7 +89,23 @@ export default function Whiteboard({
       return;
     }
     setActiveTool(tool);
-    setShowColorPanel(DRAWING_TOOLS.includes(tool));
+  }
+
+  /** The bar edits the selection when there is one, otherwise the next stroke. */
+  function handleColorChange(next: string) {
+    setColor(next);
+    if (board.selectedId) {
+      board.checkpoint();
+      board.patch(board.selectedId, { color: next });
+    }
+  }
+
+  function handleStrokeSizeChange(next: number) {
+    setStrokeSize(next);
+    if (board.selectedId) {
+      board.checkpoint();
+      board.patch(board.selectedId, { width: next });
+    }
   }
 
   function handleResetView() {
@@ -292,6 +307,16 @@ export default function Whiteboard({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [board]);
 
+  const selected = board.elements.find((el) => el.id === board.selectedId);
+  // With something selected the bar shows that element's colour, so the marker
+  // always sits on the chip the user is actually looking at.
+  const selectedColor = selected?.color ?? color;
+  const selectedWidth = selected?.width ?? strokeSize;
+  const showColorBar =
+    Boolean(board.selectedId) ||
+    DRAWING_TOOLS.includes(activeTool) ||
+    NOTE_TOOLS.includes(activeTool);
+
   const overlay = (
     <>
       <ToolRail
@@ -314,15 +339,13 @@ export default function Whiteboard({
         </button>
       )}
 
-      {showColorPanel ? (
-        <ColorPanel
-          color={color}
-          onColorChange={setColor}
-          strokeSize={strokeSize}
-          onStrokeSizeChange={setStrokeSize}
-          opacity={opacity}
-          onOpacityChange={setOpacity}
-          onClose={() => setShowColorPanel(false)}
+      {showColorBar ? (
+        <ColorBar
+          color={selectedColor}
+          onColorChange={handleColorChange}
+          strokeSize={selectedWidth}
+          onStrokeSizeChange={handleStrokeSizeChange}
+          editingSelection={Boolean(board.selectedId)}
         />
       ) : null}
 
