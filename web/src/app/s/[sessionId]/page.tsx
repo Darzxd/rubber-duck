@@ -2,7 +2,7 @@
 
 import { Suspense, use, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import AgentNode from "@/components/canvas/AgentNode";
+import BoardGraph from "@/components/canvas/BoardGraph";
 import Whiteboard from "@/components/canvas/Whiteboard";
 import TranscriptOverlay from "@/components/debug/TranscriptOverlay";
 import JoinScreen from "@/components/session/JoinScreen";
@@ -53,7 +53,7 @@ function BoardView({
     sessionId,
     author: name,
   });
-  const { nodes } = useBoardEvents(sessionId);
+  const board = useBoardEvents(sessionId);
 
   return (
     <>
@@ -61,9 +61,7 @@ function BoardView({
         sessionName={`Pizarra ${sessionId}`}
         onShare={onOpenShareModal}
       >
-        {nodes.map((node, i) => (
-          <AgentNode key={node.id} node={node} index={i} />
-        ))}
+        <BoardGraph board={board} />
       </Whiteboard>
       <TranscriptOverlay
         recording={recording}
