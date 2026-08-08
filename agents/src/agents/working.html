@@ -5,116 +5,139 @@
 <title>rubber-duck · agents internals</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0f12; --panel: #161b22; --line: #30363d;
+    --fg: #e6e8eb; --dim: #8b949e;
+    --green: #3fb950; --amber: #d29922; --red: #f85149; --blue: #58a6ff;
+  }
   body {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: #0d0f12; color: #e6e8eb; padding: 2rem; min-height: 100vh;
+    background: var(--bg); color: var(--fg); padding: 1.5rem 2rem 3rem;
+    min-height: 100vh;
   }
-  h1 { font-size: 1rem; letter-spacing: 0.2em; text-transform: uppercase; color: #8b949e; }
-  .bar { display: flex; gap: 0.75rem; align-items: center; margin: 1.25rem 0 2rem; }
-  input {
-    background: #161b22; border: 1px solid #30363d; color: #e6e8eb;
-    padding: 0.5rem 0.75rem; border-radius: 6px; font: inherit; width: 12rem;
+  header.top { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  h1 { font-size: 0.95rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+  .spacer { flex: 1; }
+  select, button {
+    background: var(--panel); border: 1px solid var(--line); color: var(--fg);
+    padding: 0.45rem 0.7rem; border-radius: 6px; font: inherit; cursor: pointer;
   }
-  button {
-    background: #238636; border: 0; color: white; padding: 0.5rem 1rem;
-    border-radius: 6px; font: inherit; cursor: pointer;
-  }
-  button:disabled { background: #30363d; cursor: default; }
-  .status { font-size: 0.75rem; color: #8b949e; }
-  .status.on { color: #3fb950; }
+  button.primary { background: #238636; border-color: #238636; color: white; }
+  .status { font-size: 0.75rem; color: var(--dim); }
+  .status.on { color: var(--green); }
 
-  .pipeline { display: flex; align-items: stretch; gap: 0.5rem; flex-wrap: wrap; }
+  h2 {
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--dim); margin-bottom: 0.6rem;
+  }
+
+  .pipeline { display: flex; align-items: stretch; gap: 0.4rem; margin: 1.5rem 0; flex-wrap: wrap; }
   .stage {
-    background: #161b22; border: 1px solid #30363d; border-radius: 10px;
-    padding: 0.9rem 1rem; min-width: 10rem; flex: 1;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 0.85rem 1rem; flex: 1; min-width: 9rem;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .stage h2 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: #8b949e; margin-bottom: 0.5rem; }
-  .stage .big { font-size: 1.6rem; font-weight: 700; }
-  .stage .sub { font-size: 0.7rem; color: #8b949e; margin-top: 0.25rem; }
-  .stage.flash { border-color: #3fb950; box-shadow: 0 0 0 1px #3fb950; }
-  .arrow { align-self: center; color: #30363d; font-size: 1.2rem; }
-
-  .agents { display: flex; flex-direction: column; gap: 0.4rem; }
-  .agent { display: flex; justify-content: space-between; font-size: 0.8rem; }
-  .agent .n { color: #8b949e; }
+  .stage.flash { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+  .stage .big { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
+  .stage .sub { font-size: 0.68rem; color: var(--dim); margin-top: 0.2rem; }
+  .arrow { align-self: center; color: var(--line); }
+  .agent { display: flex; justify-content: space-between; font-size: 0.78rem; padding: 0.1rem 0; }
+  .agent .n { color: var(--dim); }
   .agent.dim { opacity: 0.35; }
 
-  .threads { margin-top: 2rem; }
-  .threads h2, .log h2 {
-    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em;
-    color: #8b949e; margin-bottom: 0.6rem;
-  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.75rem; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; }
+  .scroll { max-height: 19rem; overflow-y: auto; }
+
   .chip {
     display: inline-block; margin: 0 0.4rem 0.4rem 0; padding: 0.3rem 0.7rem;
-    border-radius: 999px; font-size: 0.75rem; border: 1px solid #30363d;
+    border-radius: 999px; font-size: 0.75rem; border: 1px solid var(--line);
   }
-  .chip.settled { border-color: #3fb950; color: #3fb950; }
-  .chip.ongoing { border-color: #d29922; color: #d29922; }
+  .chip.settled { border-color: var(--green); color: var(--green); }
+  .chip.ongoing { border-color: var(--amber); color: var(--amber); }
 
-  .log { margin-top: 2rem; }
-  .log ul { list-style: none; max-height: 20rem; overflow-y: auto; }
-  .log li {
-    font-size: 0.75rem; padding: 0.3rem 0; border-bottom: 1px solid #161b22;
-    color: #8b949e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .log li b { color: #e6e8eb; }
-  .log li.noise b { color: #f85149; }
-  .log li.draw b { color: #3fb950; }
+  .line { font-size: 0.78rem; padding: 0.35rem 0; border-bottom: 1px solid #21262d; line-height: 1.45; }
+  .line:last-child { border-bottom: 0; }
+  .line .who { color: var(--blue); font-weight: 700; }
+  .line.dropped { color: #6e7681; text-decoration: line-through; }
+  .line .tag { font-size: 0.65rem; color: var(--red); text-decoration: none; display: inline-block; margin-left: 0.4rem; }
+
+  .note { border-left: 3px solid var(--green); padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; background: #0d1117; border-radius: 0 6px 6px 0; }
+  .note .topic { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--green); }
+  .note .label { font-size: 0.8rem; margin-top: 0.2rem; line-height: 1.45; }
+  .note .meta { font-size: 0.65rem; color: var(--dim); margin-top: 0.3rem; }
+
+  .log { margin-top: 1.5rem; }
+  .log li { list-style: none; font-size: 0.72rem; padding: 0.25rem 0; border-bottom: 1px solid #161b22; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log li b { color: var(--fg); }
+  .log li.noise b { color: var(--red); }
+  .log li.draw b { color: var(--green); }
+  .log li.organize b { color: var(--amber); }
+  .log li.ingest b { color: var(--blue); }
+  .empty { color: #30363d; font-size: 0.75rem; }
 </style>
 </head>
 <body>
-  <h1>rubber-duck · agents internals</h1>
-
-  <div class="bar">
-    <input id="session" placeholder="session id" />
-    <button id="connect">Connect</button>
-    <span class="status" id="status">disconnected</span>
-  </div>
+  <header class="top">
+    <h1>rubber-duck · agents internals</h1>
+    <span class="spacer"></span>
+    <select id="session">
+      <option value="*">all sessions (live)</option>
+    </select>
+    <button id="reload">↻ sessions</button>
+    <button class="primary" id="clear">Clear</button>
+    <span class="status" id="status">connecting…</span>
+  </header>
 
   <div class="pipeline">
     <div class="stage" id="st-ingest">
-      <h2>Ingest</h2>
-      <div class="big" id="c-ingest">0</div>
+      <h2>Ingest</h2><div class="big" id="c-ingest">0</div>
       <div class="sub">chunks received</div>
     </div>
     <div class="arrow">→</div>
     <div class="stage" id="st-filter">
-      <h2>Noise filter</h2>
-      <div class="big" id="c-noise">0</div>
+      <h2>Noise filter</h2><div class="big" id="c-noise">0</div>
       <div class="sub">dropped (jaja / fillers)</div>
     </div>
     <div class="arrow">→</div>
     <div class="stage" id="st-buffer">
-      <h2>Buffer</h2>
-      <div class="big" id="c-buffer">0</div>
+      <h2>Buffer</h2><div class="big" id="c-buffer">0</div>
       <div class="sub">chunks waiting</div>
     </div>
     <div class="arrow">→</div>
     <div class="stage" id="st-organizer">
-      <h2>Organizer · LLM</h2>
-      <div class="big" id="c-organized">0</div>
+      <h2>Organizer · LLM</h2><div class="big" id="c-organized">0</div>
       <div class="sub">organize runs</div>
     </div>
     <div class="arrow">→</div>
     <div class="stage" id="st-agents">
       <h2>Dispatch</h2>
-      <div class="agents">
-        <div class="agent"><span class="n">architect</span><span id="c-architect">0</span></div>
-        <div class="agent dim"><span class="n">critic</span><span>soon</span></div>
-        <div class="agent dim"><span class="n">scribe</span><span>soon</span></div>
-      </div>
+      <div class="agent"><span class="n">architect</span><span id="c-architect">0</span></div>
+      <div class="agent dim"><span class="n">critic</span><span>soon</span></div>
+      <div class="agent dim"><span class="n">scribe</span><span>soon</span></div>
     </div>
   </div>
 
-  <div class="threads">
+  <div>
     <h2>Threads · last organize</h2>
-    <div id="threads"><span class="sub" style="color:#30363d">nothing yet</span></div>
+    <div id="threads"><span class="empty">nothing yet</span></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <h2>Transcript in · what the mic sent</h2>
+      <div class="card scroll" id="transcript"><span class="empty">waiting for speech…</span></div>
+    </div>
+    <div>
+      <h2>Board out · what the architect drew</h2>
+      <div class="card scroll" id="board"><span class="empty">no nodes yet</span></div>
+    </div>
   </div>
 
   <div class="log">
-    <h2>Event log</h2>
-    <ul id="log"></ul>
+    <h2>Raw event log</h2>
+    <div class="card scroll"><ul id="log"></ul></div>
   </div>
 
 <script>
@@ -123,7 +146,7 @@
   const counts = { ingest: 0, noise: 0, organized: 0, architect: 0 };
 
   const params = new URLSearchParams(location.search);
-  if (params.get("session")) $("session").value = params.get("session");
+  const initial = params.get("session") || "*";
 
   function flash(id) {
     const el = $(id);
@@ -131,43 +154,86 @@
     setTimeout(() => el.classList.remove("flash"), 400);
   }
 
-  function log(kind, text) {
+  function put(containerId, node) {
+    const c = $(containerId);
+    const empty = c.querySelector(".empty");
+    if (empty) empty.remove();
+    c.prepend(node);
+    while (c.children.length > 60) c.lastChild.remove();
+  }
+
+  function log(kind, text, session) {
     const li = document.createElement("li");
     li.className = kind;
-    const time = new Date().toLocaleTimeString();
-    li.innerHTML = `<b>${kind}</b> · ${time} · ${text}`;
+    const t = new Date().toLocaleTimeString();
+    const s = session ? ` <span style="color:#484f58">[${session}]</span>` : "";
+    li.innerHTML = `<b>${kind}</b> · ${t}${s} · ${text}`;
     $("log").prepend(li);
-    while ($("log").children.length > 200) $("log").lastChild.remove();
+    while ($("log").children.length > 300) $("log").lastChild.remove();
+  }
+
+  async function loadSessions() {
+    try {
+      const r = await fetch("/sessions");
+      const { sessions } = await r.json();
+      const sel = $("session");
+      const current = sel.value;
+      sel.innerHTML = '<option value="*">all sessions (live)</option>';
+      for (const s of sessions) {
+        const o = document.createElement("option");
+        o.value = s; o.textContent = s;
+        sel.appendChild(o);
+      }
+      sel.value = current;
+    } catch {}
   }
 
   function connect() {
-    const id = $("session").value.trim();
-    if (!id) return;
+    const id = $("session").value;
     if (es) es.close();
-    es = new EventSource(`/events/${id}`);
-    $("status").textContent = `connected · ${id}`;
-    $("status").classList.add("on");
-    history.replaceState(null, "", `?session=${id}`);
+    es = new EventSource(`/events/${encodeURIComponent(id)}`);
+    history.replaceState(null, "", id === "*" ? location.pathname : `?session=${id}`);
+
+    es.onopen = () => {
+      $("status").textContent = id === "*" ? "live · all sessions" : `live · ${id}`;
+      $("status").classList.add("on");
+    };
 
     es.onmessage = (msg) => {
       let p;
       try { p = JSON.parse(msg.data); } catch { return; }
       const c = p.content || {};
+      const sid = p.sessionId;
 
-      if (p.event === "organizer.status") {
+      if (p.event === "ingest.received") {
         counts.ingest++;
         $("c-ingest").textContent = counts.ingest;
         flash("st-ingest");
+        const el = document.createElement("div");
+        el.className = "line";
+        el.dataset.text = c.text;
+        el.innerHTML = `<span class="who">${c.author}</span> ${c.text}`;
+        put("transcript", el);
+        log("ingest", `${c.author}: ${c.text}`, sid);
+        return;
+      }
 
+      if (p.event === "organizer.status") {
         if (c.stage === "noise_dropped") {
           counts.noise++;
           $("c-noise").textContent = counts.noise;
           flash("st-filter");
-          log("noise", `dropped "${c.text}"`);
+          const match = [...$("transcript").children].find(
+            (n) => n.dataset && n.dataset.text === c.text);
+          if (match) {
+            match.classList.add("dropped");
+            match.insertAdjacentHTML("beforeend", '<span class="tag">noise</span>');
+          }
+          log("noise", `dropped "${c.text}"`, sid);
         } else if (c.stage === "buffered") {
           $("c-buffer").textContent = c.buffer;
           flash("st-buffer");
-          log("buffer", `+1 "${c.text}" (${c.buffer} waiting)`);
+          log("buffer", `"${c.text}" (${c.buffer} waiting)`, sid);
         } else if (c.stage === "organized") {
           counts.organized++;
           $("c-organized").textContent = counts.organized;
@@ -175,21 +241,37 @@
           flash("st-organizer");
           const threads = c.threads || [];
           $("threads").innerHTML = threads.length
-            ? threads.map(t =>
+            ? threads.map((t) =>
                 `<span class="chip ${t.settled ? "settled" : "ongoing"}">` +
                 `${t.settled ? "●" : "○"} ${t.topic}</span>`).join("")
-            : '<span class="sub" style="color:#30363d">all discarded</span>';
-          log("organize", `${c.chunks} chunks → ` +
-            threads.map(t => `${t.topic} [${t.settled ? "settled" : "ongoing"}]`).join(", "));
+            : '<span class="empty">all discarded</span>';
+          log("organize",
+            `${c.chunks} chunks → ` + (threads.length
+              ? threads.map((t) => `${t.topic} [${t.settled ? "settled" : "ongoing"}]`).join(", ")
+              : "nothing worth keeping"), sid);
         }
-      } else if (p.event === "architect.draw") {
-        counts.architect += (c.nodes || []).length;
+        return;
+      }
+
+      if (p.event === "architect.draw") {
+        const nodes = c.nodes || [];
+        counts.architect += nodes.length;
         $("c-architect").textContent = counts.architect;
         flash("st-agents");
-        log("draw", (c.nodes || []).map(n => `"${n.topic || n.label}"`).join(", "));
-      } else {
-        log("event", p.event);
+        for (const n of nodes) {
+          const el = document.createElement("div");
+          el.className = "note";
+          el.innerHTML =
+            `<div class="topic">${n.topic || "sin tema"}</div>` +
+            `<div class="label">${n.label}</div>` +
+            `<div class="meta">${n.author || "?"} · ${c.threadId || ""}</div>`;
+          put("board", el);
+        }
+        log("draw", nodes.map((n) => `"${n.topic || n.label}"`).join(", "), sid);
+        return;
       }
+
+      log("event", p.event, sid);
     };
 
     es.onerror = () => {
@@ -198,9 +280,20 @@
     };
   }
 
-  $("connect").addEventListener("click", connect);
-  $("session").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
-  if ($("session").value) connect();
+  $("session").addEventListener("change", connect);
+  $("reload").addEventListener("click", loadSessions);
+  $("clear").addEventListener("click", () => {
+    for (const k in counts) counts[k] = 0;
+    ["c-ingest","c-noise","c-buffer","c-organized","c-architect"]
+      .forEach((id) => ($(id).textContent = "0"));
+    $("log").innerHTML = "";
+    $("transcript").innerHTML = '<span class="empty">waiting for speech…</span>';
+    $("board").innerHTML = '<span class="empty">no nodes yet</span>';
+    $("threads").innerHTML = '<span class="empty">nothing yet</span>';
+  });
+
+  loadSessions().then(() => { $("session").value = initial; connect(); });
+  setInterval(loadSessions, 10000);
 </script>
 </body>
 </html>

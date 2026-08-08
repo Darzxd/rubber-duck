@@ -9,12 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from agents.bus import subscribe, unsubscribe
+from agents.bus import emit, sessions, subscribe, unsubscribe
 from agents.graph import graph
 from agents.settings import get_settings
 from agents.state import TranscriptChunk
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("agents.api")
 
 app = FastAPI(title="rubber-duck agents")
 
@@ -46,9 +47,22 @@ async def working() -> FileResponse:
     return FileResponse(Path(__file__).parent / "working.html")
 
 
+@app.get("/sessions")
+async def list_sessions() -> dict:
+    return {"sessions": sessions()}
+
+
 @app.post("/ingest")
 async def ingest(req: IngestRequest) -> dict:
     chunk: TranscriptChunk = {"author": req.author, "text": req.text, "ts": req.ts}
+    logger.info(
+        "ingest session=%s author=%s text=%r", req.session_id, req.author, req.text
+    )
+    await emit(
+        req.session_id,
+        "ingest.received",
+        {"author": req.author, "text": req.text},
+    )
     await graph.ainvoke(
         {
             "session_id": req.session_id,
