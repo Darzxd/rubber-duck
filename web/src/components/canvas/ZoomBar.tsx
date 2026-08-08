@@ -6,6 +6,8 @@ type ZoomBarProps = {
   onZoomOut: () => void;
   isPanning: boolean;
   onTogglePan: () => void;
+  /** Snaps back to 100% at the origin — the way out of an endless canvas. */
+  onResetView: () => void;
 };
 
 const BUTTON =
@@ -17,6 +19,7 @@ export default function ZoomBar({
   onZoomOut,
   isPanning,
   onTogglePan,
+  onResetView,
 }: ZoomBarProps) {
   return (
     <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-1.5 py-1.5 shadow-lg shadow-neutral-900/5 sm:bottom-4 sm:right-4 dark:border-neutral-700 dark:bg-neutral-900">
@@ -44,9 +47,14 @@ export default function ZoomBar({
       >
         <MinusIcon className="size-3.5" />
       </button>
-      <span className="min-w-11 text-center text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
+      <button
+        type="button"
+        onClick={onResetView}
+        title="Centrar la vista y volver a 100%"
+        className="min-w-11 rounded-md py-0.5 text-center text-xs font-semibold tabular-nums text-neutral-700 transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+      >
         {zoom}%
-      </span>
+      </button>
       <button
         type="button"
         aria-label="Acercar"

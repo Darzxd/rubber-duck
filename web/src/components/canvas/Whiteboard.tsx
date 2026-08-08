@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import ActionBar from "./ActionBar";
+import CanvasSurface from "./CanvasSurface";
 import ColorPanel from "./ColorPanel";
 import PresenceCursor from "./PresenceCursor";
 import SidePanel from "./SidePanel";
@@ -39,10 +40,16 @@ export default function Whiteboard({
   const [strokeSize, setStrokeSize] = useState(4);
   const [opacity, setOpacity] = useState(100);
   const [zoom, setZoom] = useState(100);
+  const [resetSignal, setResetSignal] = useState(0);
 
   function handleSelectTool(tool: ToolId) {
     setActiveTool(tool);
     setShowColorPanel(DRAWING_TOOLS.includes(tool));
+  }
+
+  function handleResetView() {
+    setZoom(100);
+    setResetSignal((signal) => signal + 1);
   }
 
   return (
@@ -57,60 +64,60 @@ export default function Whiteboard({
           />
 
           <div className="flex flex-1 overflow-hidden">
-            <section
-              aria-label={`Lienzo de ${sessionName}`}
-              className="relative flex-1 overflow-hidden bg-neutral-50 dark:bg-neutral-950"
-              style={{
-                backgroundImage: `radial-gradient(circle, ${
-                  isDark ? "#2b2b31" : "#d7d7de"
-                } 1.1px, transparent 1.1px)`,
-                backgroundSize: "22px 22px",
-              }}
+            <CanvasSurface
+              isDark={isDark}
+              zoom={zoom}
+              forcePan={activeTool === "hand"}
+              resetSignal={resetSignal}
+              overlay={
+                <>
+                  <ToolRail
+                    activeTool={activeTool}
+                    onSelectTool={handleSelectTool}
+                  />
+
+                  {showColorPanel ? (
+                    <ColorPanel
+                      color={color}
+                      onColorChange={setColor}
+                      strokeSize={strokeSize}
+                      onStrokeSizeChange={setStrokeSize}
+                      opacity={opacity}
+                      onOpacityChange={setOpacity}
+                      onClose={() => setShowColorPanel(false)}
+                    />
+                  ) : null}
+
+                  <ActionBar />
+
+                  <ThemeSwitch
+                    isDark={isDark}
+                    onToggle={() => setIsDark((dark) => !dark)}
+                  />
+
+                  <ZoomBar
+                    zoom={zoom}
+                    onZoomIn={() =>
+                      setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))
+                    }
+                    onZoomOut={() =>
+                      setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))
+                    }
+                    isPanning={activeTool === "hand"}
+                    onTogglePan={() =>
+                      handleSelectTool(activeTool === "hand" ? "select" : "hand")
+                    }
+                    onResetView={handleResetView}
+                  />
+                </>
+              }
             >
               {children}
 
               {authors.map((author) => (
                 <PresenceCursor key={author.id} author={author} />
               ))}
-
-              <ToolRail
-                activeTool={activeTool}
-                onSelectTool={handleSelectTool}
-              />
-
-              {showColorPanel ? (
-                <ColorPanel
-                  color={color}
-                  onColorChange={setColor}
-                  strokeSize={strokeSize}
-                  onStrokeSizeChange={setStrokeSize}
-                  opacity={opacity}
-                  onOpacityChange={setOpacity}
-                  onClose={() => setShowColorPanel(false)}
-                />
-              ) : null}
-
-              <ActionBar />
-
-              <ThemeSwitch
-                isDark={isDark}
-                onToggle={() => setIsDark((dark) => !dark)}
-              />
-
-              <ZoomBar
-                zoom={zoom}
-                onZoomIn={() =>
-                  setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))
-                }
-                onZoomOut={() =>
-                  setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))
-                }
-                isPanning={activeTool === "hand"}
-                onTogglePan={() =>
-                  handleSelectTool(activeTool === "hand" ? "select" : "hand")
-                }
-              />
-            </section>
+            </CanvasSurface>
 
             <SidePanel />
           </div>
