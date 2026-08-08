@@ -161,21 +161,28 @@ export default function ToolRail({
           </button>
         </div>
 
+        {/* Expands in place. A flyout beside the rail gets clipped, because the
+            rail scrolls and anything past its 6.5rem width is cut off. */}
         {activeTool === "shape" ? (
-          <div className="absolute left-full top-1/2 z-40 ml-2 flex -translate-y-1/2 items-center gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-xl shadow-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900">
-            {SHAPES.map(({ kind, label, Icon }) => (
-              <button
-                key={kind}
-                type="button"
-                title={label}
-                aria-label={label}
-                aria-pressed={shapeKind === kind}
-                onClick={() => onShapeKindChange(kind)}
-                className={`${TOOL} ${shapeKind === kind ? TOOL_ON : TOOL_OFF}`}
-              >
-                <Icon />
-              </button>
-            ))}
+          <div className="mt-1 border-t border-neutral-200 pt-1.5 dark:border-neutral-700">
+            <p className={SECTION_LABEL}>Forma</p>
+            <div className="grid grid-cols-3 gap-0.5">
+              {SHAPES.map(({ kind, label, Icon }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={shapeKind === kind}
+                  onClick={() => onShapeKindChange(kind)}
+                  className={`grid size-7 place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 ${
+                    shapeKind === kind ? TOOL_ON : TOOL_OFF
+                  }`}
+                >
+                  <Icon className="size-4" />
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
