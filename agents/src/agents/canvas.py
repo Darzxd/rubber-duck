@@ -41,6 +41,10 @@ NOTE_H = 110
 NOTE_GAP = 48
 GROUP_HEAD = 52
 GROUP_PAD = 20
+# Below this the board is not a diagram yet, so it does not get dressed as one.
+# A title and a labelled frame around a single note make the board look like it
+# understood something it did not.
+DRESSED_FROM = 3
 FRAME_GREY = "#d4d4d4"
 INK = "#525252"
 
@@ -97,38 +101,42 @@ def build(
     boxes: dict[str, tuple[float, float]] = {}
     column_of: dict[str, int] = {}
 
+    dressed = sum(len(g["notes"]) for g in groups) >= DRESSED_FROM
+    head_h = GROUP_HEAD if dressed else 0
+
     for index, group in enumerate(groups):
         if not group["notes"]:
             continue
         x = ORIGIN_X + index * (COLUMN_W + COLUMN_GAP)
         height = (
-            GROUP_HEAD
+            head_h
             + len(group["notes"]) * (NOTE_H + NOTE_GAP)
             - NOTE_GAP
             + GROUP_PAD
         )
-        frames.append(
-            _base(
-                f"f{index}",
-                FRAME_GREY,
-                kind="rect",
-                x=x,
-                y=ORIGIN_Y,
-                w=COLUMN_W,
-                h=height,
-                dash="dashed",
-                radius=20,
+        if dressed:
+            frames.append(
+                _base(
+                    f"f{index}",
+                    FRAME_GREY,
+                    kind="rect",
+                    x=x,
+                    y=ORIGIN_Y,
+                    w=COLUMN_W,
+                    h=height,
+                    dash="dashed",
+                    radius=20,
+                )
             )
-        )
-        if group["title"]:
-            labels.append(
-                _text(f"ft{index}", x + GROUP_PAD, ORIGIN_Y + 12, group["title"])
-            )
+            if group["title"]:
+                labels.append(
+                    _text(f"ft{index}", x + GROUP_PAD, ORIGIN_Y + 12, group["title"])
+                )
 
         for row, note in enumerate(group["notes"]):
             tag, tone = NOTE_STYLES[note["kind"]]
             nx = x + GROUP_PAD
-            ny = ORIGIN_Y + GROUP_HEAD + row * (NOTE_H + NOTE_GAP)
+            ny = ORIGIN_Y + head_h + row * (NOTE_H + NOTE_GAP)
             boxes[note["id"]] = (nx, ny)
             column_of[note["id"]] = index
             notes.append(
@@ -170,7 +178,7 @@ def build(
             ly = (y1 + y2) / 2 - 14 if down else (y1 + y2) / 2 - 40
             labels.append(_text(f"al{key}", lx, ly, arrow["label"]))
 
-    head = [_text("title", ORIGIN_X, 44, title)] if title else []
+    head = [_text("title", ORIGIN_X, 44, title)] if title and dressed else []
     # Order is the stacking order: frames behind, arrows over them, notes on
     # top of both, and anything written last of all.
     return head + frames + lines + notes + labels
