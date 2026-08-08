@@ -12,8 +12,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_organizer_model: str = "gpt-4.1-mini"
-    openai_realtime_model: str = "gpt-live-transcribe"
+    # gpt-live-transcribe streams deltas but rejects turn_detection, so it
+    # never closes a segment — we need server VAD to get final transcripts.
+    openai_realtime_model: str = "gpt-4o-transcribe"
     openai_realtime_language: str = "es"
+    openai_realtime_silence_ms: int = 600
 
     portal_secret: str = ""
     portal_api_url: str = "https://api.useportal.co"

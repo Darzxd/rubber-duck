@@ -95,7 +95,13 @@ async def realtime_session() -> dict:
                         "input": {
                             "transcription": {
                                 "model": settings.openai_realtime_model,
-                                "languages": [settings.openai_realtime_language],
+                                "language": settings.openai_realtime_language,
+                            },
+                            "turn_detection": {
+                                "type": "server_vad",
+                                "silence_duration_ms": (
+                                    settings.openai_realtime_silence_ms
+                                ),
                             },
                         }
                     },
