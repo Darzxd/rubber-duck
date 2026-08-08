@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AgentNode from "@/components/canvas/AgentNode";
 import Whiteboard from "@/components/canvas/Whiteboard";
 import TranscriptOverlay from "@/components/debug/TranscriptOverlay";
-import InviteChip from "@/components/session/InviteChip";
 import JoinScreen from "@/components/session/JoinScreen";
 import ShareModal from "@/components/session/ShareModal";
 import { useBoardEvents } from "@/lib/board";
@@ -62,7 +61,6 @@ function BoardView({
         sessionName={`Pizarra ${sessionId}`}
         onShare={onOpenShareModal}
       >
-        <InviteChip sessionId={sessionId} />
         {nodes.map((node, i) => (
           <AgentNode key={node.id} node={node} index={i} />
         ))}

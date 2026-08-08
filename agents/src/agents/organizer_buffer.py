@@ -8,7 +8,7 @@ from agents.state import TranscriptChunk
 # multi-worker deploy this needs to move to Redis or the bus — one process
 # is enough for the hackathon.
 _buffers: dict[str, dict] = defaultdict(
-    lambda: {"chunks": [], "last_organized": 0.0},
+    lambda: {"chunks": [], "last_organized": time.time()},
 )
 
 

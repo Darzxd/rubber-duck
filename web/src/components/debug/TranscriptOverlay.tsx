@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import type { Chunk } from "@/lib/session";
 
 type TranscriptOverlayProps = {
@@ -10,57 +12,54 @@ type TranscriptOverlayProps = {
   error: string | null;
 };
 
-// Temporary debug UI — remove once agent output drives the visible canvas.
+const CAPTION_TAIL = 160;
+const HIDE_AFTER_MS = 4000;
+
 export default function TranscriptOverlay({
-  recording,
   supported,
   interim,
   chunks,
   error,
 }: TranscriptOverlayProps) {
-  const status = !supported
-    ? "unsupported"
-    : error
-      ? "error"
-      : recording
-        ? "recording"
-        : "idle";
+  const last = chunks[chunks.length - 1];
+  const text = interim || last?.text || "";
+  const author = interim ? null : (last?.author ?? null);
+  const [visible, setVisible] = useState(false);
 
-  const dot =
-    status === "recording"
-      ? "bg-emerald-500"
-      : status === "error" || status === "unsupported"
-        ? "bg-red-500"
-        : "bg-neutral-400";
+  useEffect(() => {
+    if (!text) return;
+    setVisible(true);
+    const t = setTimeout(() => setVisible(false), HIDE_AFTER_MS);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  if (!supported || error) {
+    return (
+      <div className="pointer-events-none fixed bottom-6 left-1/2 z-30 -translate-x-1/2">
+        <p className="max-w-[32rem] rounded-full bg-red-600/90 px-4 py-2 text-sm text-white shadow-lg backdrop-blur">
+          {error ?? "Este navegador no soporta captura de voz. Probá Chrome."}
+        </p>
+      </div>
+    );
+  }
+
+  if (!text) return null;
+
+  const caption =
+    text.length > CAPTION_TAIL ? `…${text.slice(-CAPTION_TAIL)}` : text;
 
   return (
-    <div className="pointer-events-auto fixed bottom-4 right-4 z-30 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-neutral-200 bg-white/95 p-3 shadow-lg backdrop-blur">
-      <header className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-neutral-500">
-        <span className={`inline-block size-2 rounded-full ${dot}`} />
-        transcript · {status}
-      </header>
-      {!supported && (
-        <p className="text-xs text-red-600">
-          Speech recognition is not supported in this browser. Try Chrome.
-        </p>
-      )}
-      {error && (
-        <p className="mb-2 text-xs text-red-600">{error}</p>
-      )}
-      <div className="max-h-52 space-y-1.5 overflow-y-auto text-sm text-neutral-800">
-        {chunks.map((c) => (
-          <p key={c.id} className="leading-snug">
-            <span className="font-semibold text-neutral-500">{c.author}:</span>{" "}
-            {c.text}
-          </p>
-        ))}
-        {interim && (
-          <p className="italic text-neutral-400 leading-snug">{interim}</p>
+    <div
+      className={`pointer-events-none fixed bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity duration-500 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <p className="max-w-[36rem] rounded-2xl bg-neutral-900/85 px-4 py-2 text-sm leading-snug text-white shadow-lg backdrop-blur">
+        {author && (
+          <span className="font-semibold text-white/60">{author} · </span>
         )}
-        {!chunks.length && !interim && (
-          <p className="italic text-neutral-400">Waiting for speech…</p>
-        )}
-      </div>
+        {caption}
+      </p>
     </div>
   );
 }
