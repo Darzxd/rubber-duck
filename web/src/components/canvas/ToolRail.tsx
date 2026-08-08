@@ -9,47 +9,63 @@ import {
   MicIcon,
   PenIcon,
   PlusIcon,
+  PollIcon,
+  RectToolIcon,
   RedoIcon,
   SelectIcon,
-  ShapesIcon,
+  SelectAllIcon,
   SparkleIcon,
+  TableIcon,
   TaskTrendIcon,
   TextIcon,
+  TriangleToolIcon,
   UndoIcon,
 } from "./icons";
+
+/** The three shapes that share one slot on the rail. */
+export type ShapeKind = "rect" | "ellipse" | "triangle";
 
 export type ToolId =
   | "select"
   | "text"
   | "pen"
-  | "shapes"
-  | "circle"
+  | "shape"
   | "arrow"
   | "image"
+  | "table"
   | "hand"
   | "idea"
   | "decision"
   | "task"
-  | "doubt";
+  | "doubt"
+  | "poll";
 
 export type AiActionId = "capture" | "organise" | "summarise";
 
 type ToolRailProps = {
   activeTool: ToolId;
   onSelectTool: (tool: ToolId) => void;
+  shapeKind: ShapeKind;
+  onShapeKindChange: (kind: ShapeKind) => void;
   onAiAction?: (action: AiActionId) => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  onSelectAll?: () => void;
 };
 
 const BUILD: { id: ToolId; label: string; Icon: typeof SelectIcon }[] = [
   { id: "select", label: "Seleccionar", Icon: SelectIcon },
   { id: "text", label: "Texto", Icon: TextIcon },
   { id: "pen", label: "Lápiz", Icon: PenIcon },
-  { id: "shapes", label: "Formas", Icon: ShapesIcon },
-  { id: "circle", label: "Círculo", Icon: CircleToolIcon },
   { id: "arrow", label: "Flecha", Icon: ArrowToolIcon },
+  { id: "table", label: "Tabla", Icon: TableIcon },
   { id: "image", label: "Imagen", Icon: ImageIcon },
+];
+
+const SHAPES: { kind: ShapeKind; label: string; Icon: typeof SelectIcon }[] = [
+  { kind: "rect", label: "Rectángulo", Icon: RectToolIcon },
+  { kind: "ellipse", label: "Círculo", Icon: CircleToolIcon },
+  { kind: "triangle", label: "Triángulo", Icon: TriangleToolIcon },
 ];
 
 const THINK: {
@@ -62,6 +78,7 @@ const THINK: {
   { id: "decision", label: "Decisión", Icon: DecisionIcon, tint: "bg-emerald-50 text-emerald-500 dark:bg-emerald-500/15" },
   { id: "task", label: "Tarea", Icon: TaskTrendIcon, tint: "bg-blue-50 text-blue-500 dark:bg-blue-500/15" },
   { id: "doubt", label: "Duda", Icon: DoubtIcon, tint: "bg-violet-50 text-violet-500 dark:bg-violet-500/15" },
+  { id: "poll", label: "Votación", Icon: PollIcon, tint: "bg-rose-50 text-rose-500 dark:bg-rose-500/15" },
 ];
 
 const AI: { id: AiActionId; label: string; Icon: typeof MicIcon }[] = [
@@ -76,14 +93,25 @@ const SECTION_LABEL =
   "px-1 pb-1.5 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-neutral-400";
 const ROW =
   "flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-[0.72rem] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
+const TOOL =
+  "grid size-9 place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
+const TOOL_ON = "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900";
+const TOOL_OFF =
+  "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800";
 
 export default function ToolRail({
   activeTool,
   onSelectTool,
+  shapeKind,
+  onShapeKindChange,
   onAiAction,
   onUndo,
   onRedo,
+  onSelectAll,
 }: ToolRailProps) {
+  const ActiveShapeIcon =
+    SHAPES.find((shape) => shape.kind === shapeKind)?.Icon ?? RectToolIcon;
+
   return (
     <div className="no-scrollbar pointer-events-auto absolute left-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-[6.5rem] flex-col gap-2 overflow-y-auto">
       <div className={CARD}>
@@ -97,7 +125,7 @@ export default function ToolRail({
         </button>
       </div>
 
-      <div className={CARD}>
+      <div className={`${CARD} relative`}>
         <p className={SECTION_LABEL}>Construir</p>
         <div className="grid grid-cols-2 gap-1">
           {BUILD.map(({ id, label, Icon }) => (
@@ -108,16 +136,55 @@ export default function ToolRail({
               aria-label={label}
               aria-pressed={activeTool === id}
               onClick={() => onSelectTool(id)}
-              className={`grid size-9 place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 ${
-                activeTool === id
-                  ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                  : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-              }`}
+              className={`${TOOL} ${activeTool === id ? TOOL_ON : TOOL_OFF}`}
             >
               <Icon />
             </button>
           ))}
+
+          {/* The three shapes share one slot; the icon shows the active one. */}
+          <button
+            type="button"
+            title="Formas"
+            aria-label="Formas"
+            aria-pressed={activeTool === "shape"}
+            onClick={() => onSelectTool("shape")}
+            className={`${TOOL} relative ${
+              activeTool === "shape" ? TOOL_ON : TOOL_OFF
+            }`}
+          >
+            <ActiveShapeIcon />
+            <span
+              aria-hidden="true"
+              className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-current opacity-50"
+            />
+          </button>
         </div>
+
+        {/* Expands in place. A flyout beside the rail gets clipped, because the
+            rail scrolls and anything past its 6.5rem width is cut off. */}
+        {activeTool === "shape" ? (
+          <div className="mt-1 border-t border-neutral-200 pt-1.5 dark:border-neutral-700">
+            <p className={SECTION_LABEL}>Forma</p>
+            <div className="grid grid-cols-3 gap-0.5">
+              {SHAPES.map(({ kind, label, Icon }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={shapeKind === kind}
+                  onClick={() => onShapeKindChange(kind)}
+                  className={`grid size-7 place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 ${
+                    shapeKind === kind ? TOOL_ON : TOOL_OFF
+                  }`}
+                >
+                  <Icon className="size-4" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className={CARD}>
@@ -155,6 +222,19 @@ export default function ToolRail({
             {label}
           </button>
         ))}
+      </div>
+
+      <div className={CARD}>
+        <button
+          type="button"
+          onClick={onSelectAll}
+          aria-label="Seleccionar todo"
+          title="Seleccionar todo (Ctrl+A)"
+          className={`${ROW} text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800`}
+        >
+          <SelectAllIcon className="size-4 shrink-0 text-neutral-400" />
+          Todo
+        </button>
       </div>
 
       <div className={`${CARD} flex justify-center gap-1`}>

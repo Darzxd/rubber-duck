@@ -2,17 +2,35 @@ import type { StickyTone } from "./StickyNote";
 
 export type Point = { x: number; y: number };
 
+export type StrokeStyle = "solid" | "dashed" | "dotted";
+
 type Base = {
   id: string;
   color: string;
   width: number;
   opacity: number;
+  dash: StrokeStyle;
+  /** Corner rounding in px; only the boxy shapes use it. */
+  radius: number;
 };
+
+/** Turns a stroke style into an SVG dash pattern scaled to the line width. */
+export function dashArray(style: StrokeStyle, width: number) {
+  if (style === "dashed") return `${width * 3} ${width * 2.2}`;
+  // A zero-length dash with a round cap draws a dot.
+  if (style === "dotted") return `0 ${width * 2.2}`;
+  return undefined;
+}
+
+export const STROKE_STYLES: StrokeStyle[] = ["solid", "dashed", "dotted"];
+export const CORNER_RADII = [0, 8, 20];
+export const OPACITIES = [100, 60, 30];
 
 export type BoardElement =
   | (Base & { kind: "path"; points: Point[] })
   | (Base & { kind: "rect"; x: number; y: number; w: number; h: number })
   | (Base & { kind: "ellipse"; x: number; y: number; w: number; h: number })
+  | (Base & { kind: "triangle"; x: number; y: number; w: number; h: number })
   | (Base & { kind: "arrow"; x1: number; y1: number; x2: number; y2: number })
   | (Base & { kind: "text"; x: number; y: number; text: string })
   | (Base & {
@@ -30,6 +48,22 @@ export type BoardElement =
       w: number;
       h: number;
       src: string;
+    })
+  | (Base & {
+      kind: "poll";
+      x: number;
+      y: number;
+      question: string;
+      options: { label: string; votes: number }[];
+    })
+  | (Base & {
+      kind: "table";
+      x: number;
+      y: number;
+      /** Row-major cell text; its shape is the size of the table. */
+      cells: string[][];
+      cellW: number;
+      cellH: number;
     });
 
 export type BoundingBox = { x: number; y: number; w: number; h: number };
@@ -56,6 +90,7 @@ export function boundsOf(element: BoardElement): BoundingBox {
     }
     case "rect":
     case "ellipse":
+    case "triangle":
     case "image":
       return { x: element.x, y: element.y, w: element.w, h: element.h };
     case "arrow":
@@ -69,7 +104,56 @@ export function boundsOf(element: BoardElement): BoundingBox {
       return { x: element.x, y: element.y, ...NOTE_SIZE };
     case "text":
       return { x: element.x, y: element.y, ...TEXT_SIZE };
+    case "table":
+      return {
+        x: element.x,
+        y: element.y,
+        w: (element.cells[0]?.length ?? 0) * element.cellW,
+        h: element.cells.length * element.cellH,
+      };
+    case "poll":
+      return {
+        x: element.x,
+        y: element.y,
+        w: POLL_WIDTH,
+        h: POLL_HEADER + element.options.length * POLL_ROW + POLL_FOOTER,
+      };
   }
+}
+
+export const POLL_WIDTH = 244;
+export const POLL_HEADER = 46;
+export const POLL_ROW = 38;
+export const POLL_FOOTER = 14;
+
+export function newPoll() {
+  return {
+    question: "",
+    options: [
+      { label: "", votes: 0 },
+      { label: "", votes: 0 },
+    ],
+  };
+}
+
+export const TABLE_DEFAULTS = { cols: 3, rows: 3, cellW: 116, cellH: 34 };
+
+export function emptyCells(rows: number, cols: number) {
+  return Array.from({ length: rows }, () => Array.from({ length: cols }, () => ""));
+}
+
+/** Which cell of a table a board point lands on, or null if it misses. */
+export function cellAt(
+  element: Extract<BoardElement, { kind: "table" }>,
+  point: Point,
+) {
+  const col = Math.floor((point.x - element.x) / element.cellW);
+  const row = Math.floor((point.y - element.y) / element.cellH);
+  const cols = element.cells[0]?.length ?? 0;
+  if (row < 0 || col < 0 || row >= element.cells.length || col >= cols) {
+    return null;
+  }
+  return { row, col };
 }
 
 /** Generous by a few px so thin strokes are still easy to grab. */

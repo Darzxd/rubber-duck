@@ -56,7 +56,7 @@ export default function TopBar({
       ) : null}
 
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 md:ml-0">
-        <AvatarStack authors={authors} />
+        {authors.length > 0 ? <AvatarStack authors={authors} /> : null}
 
         <span className="hidden items-center gap-1.5 sm:flex">
           <span className="relative grid size-2.5 place-items-center">

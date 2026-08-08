@@ -357,3 +357,44 @@ export const PanelRightIcon = ({ className }: IconProps) => (
     className={className ?? "size-4"}
   />
 );
+
+export const TableIcon = ({ className }: IconProps) => (
+  <Line
+    d="M4.2 6.6a1.4 1.4 0 0 1 1.4-1.4h12.8a1.4 1.4 0 0 1 1.4 1.4v10.8a1.4 1.4 0 0 1-1.4 1.4H5.6a1.4 1.4 0 0 1-1.4-1.4zM4.2 9.6h15.6M9.6 9.6v9.2M4.2 14.2h15.6"
+    className={className}
+  />
+);
+
+export const SelectAllIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className={className ?? BASE} fill="none">
+    <rect
+      x="4.2"
+      y="4.2"
+      width="15.6"
+      height="15.6"
+      rx="2.4"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeDasharray="3.4 2.6"
+    />
+    <rect x="8.4" y="8.4" width="7.2" height="7.2" rx="1.2" fill="currentColor" />
+  </svg>
+);
+
+export const PollIcon = ({ className }: IconProps) => (
+  <Line
+    d="M6.4 19.5v-6.2M12 19.5V6.4M17.6 19.5v-9.4M4.4 21.5h15.2"
+    className={className}
+  />
+);
+
+export const RectToolIcon = ({ className }: IconProps) => (
+  <Line
+    d="M4.4 6.6a2.2 2.2 0 0 1 2.2-2.2h10.8a2.2 2.2 0 0 1 2.2 2.2v10.8a2.2 2.2 0 0 1-2.2 2.2H6.6a2.2 2.2 0 0 1-2.2-2.2z"
+    className={className}
+  />
+);
+
+export const TriangleToolIcon = ({ className }: IconProps) => (
+  <Line d="M12 4.4 20.2 19.6H3.8z" className={className} />
+);
