@@ -275,3 +275,74 @@ export const MoonIcon = ({ className }: IconProps) => (
     />
   </svg>
 );
+
+/* ---------- added for the side panel and grouped rail ---------- */
+
+export const MicIcon = ({ className }: IconProps) => (
+  <Line
+    d="M12 3.4a2.7 2.7 0 0 1 2.7 2.7v5.6a2.7 2.7 0 0 1-5.4 0V6.1A2.7 2.7 0 0 1 12 3.4ZM18.2 11a6.2 6.2 0 0 1-12.4 0M12 17.4v3.2"
+    className={className}
+  />
+);
+
+export const ListIcon = ({ className }: IconProps) => (
+  <Line
+    d="M4.5 7h2M9.5 7h10M4.5 12h2M9.5 12h10M4.5 17h2M9.5 17h10"
+    className={className}
+  />
+);
+
+export const SearchIcon = ({ className }: IconProps) => (
+  <Line d="M15.6 15.6 20 20M17.4 10.7a6.7 6.7 0 1 1-13.4 0 6.7 6.7 0 0 1 13.4 0Z" className={className ?? "size-4"} />
+);
+
+export const FilterIcon = ({ className }: IconProps) => (
+  <Line d="M4.5 6h15l-5.8 6.9v5.4l-3.4 1.7v-7.1z" className={className ?? "size-4"} />
+);
+
+export const ArrowRightIcon = ({ className }: IconProps) => (
+  <Line d="M4.5 12h15M14 6.5l5.5 5.5L14 17.5" className={className ?? "size-4"} />
+);
+
+export const FullscreenIcon = ({ className }: IconProps) => (
+  <Line
+    d="M4.5 9V5.6A1.1 1.1 0 0 1 5.6 4.5H9M15 4.5h3.4a1.1 1.1 0 0 1 1.1 1.1V9M19.5 15v3.4a1.1 1.1 0 0 1-1.1 1.1H15M9 19.5H5.6a1.1 1.1 0 0 1-1.1-1.1V15"
+    className={className ?? "size-4"}
+  />
+);
+
+export const DecisionIcon = ({ className }: IconProps) => (
+  <Line
+    d="M5.2 6.6a1.4 1.4 0 0 1 1.4-1.4h10.8a1.4 1.4 0 0 1 1.4 1.4v10.8a1.4 1.4 0 0 1-1.4 1.4H6.6a1.4 1.4 0 0 1-1.4-1.4zM8.8 12.2l2.3 2.3 4.1-4.6"
+    className={className}
+  />
+);
+
+export const TaskTrendIcon = ({ className }: IconProps) => (
+  <Line
+    d="M5.2 6.6a1.4 1.4 0 0 1 1.4-1.4h10.8a1.4 1.4 0 0 1 1.4 1.4v10.8a1.4 1.4 0 0 1-1.4 1.4H6.6a1.4 1.4 0 0 1-1.4-1.4zM8.4 14.6l2.6-3 2.2 2 2.4-3.4"
+    className={className}
+  />
+);
+
+export const DoubtIcon = ({ className }: IconProps) => (
+  <Line
+    d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5M12 16.8v.4"
+    className={className}
+  />
+);
+
+export const CircleToolIcon = ({ className }: IconProps) => (
+  <Line d="M19.6 12a7.6 7.6 0 1 1-15.2 0 7.6 7.6 0 0 1 15.2 0Z" className={className} />
+);
+
+export const RobotIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className={className ?? BASE} fill="none">
+    <rect x="4.6" y="7.4" width="14.8" height="12" rx="3.4" stroke="currentColor" strokeWidth={1.7} />
+    <path d="M12 4.2v3.2" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" />
+    <circle cx="12" cy="3.4" r="1.4" fill="currentColor" />
+    <circle cx="9.4" cy="12.4" r="1.4" fill="currentColor" />
+    <circle cx="14.6" cy="12.4" r="1.4" fill="currentColor" />
+    <path d="M9.6 16h4.8" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" />
+  </svg>
+);
