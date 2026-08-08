@@ -150,11 +150,30 @@ async def unsure(req: UnsureRequest) -> dict:
     return {"ok": True}
 
 
+def _turn_detection(vad: str, eagerness: str, silence_ms: int) -> dict:
+    if vad == "server_vad":
+        return {"type": "server_vad", "silence_duration_ms": silence_ms}
+    return {"type": "semantic_vad", "eagerness": eagerness}
+
+
 @app.post("/realtime-session")
-async def realtime_session() -> dict:
+async def realtime_session(
+    vad: str | None = None,
+    eagerness: str | None = None,
+    silence_ms: int | None = None,
+) -> dict:
+    """Query params override the defaults so sensitivity can be compared live
+    from the URL, without a restart."""
     settings = get_settings()
     if not settings.openai_api_key:
         raise HTTPException(500, "OPENAI_API_KEY is not set")
+
+    turn_detection = _turn_detection(
+        vad or settings.openai_realtime_vad,
+        eagerness or settings.openai_realtime_eagerness,
+        silence_ms or settings.openai_realtime_silence_ms,
+    )
+    logger.info("realtime session turn_detection=%s", turn_detection)
 
     transcription: dict = {
         "model": settings.openai_realtime_model,
@@ -176,15 +195,7 @@ async def realtime_session() -> dict:
                     "audio": {
                         "input": {
                             "transcription": transcription,
-                            # Deliberately bare. Every knob added on top of
-                            # this — threshold, padding, noise reduction —
-                            # made transcription worse, not better.
-                            "turn_detection": {
-                                "type": "server_vad",
-                                "silence_duration_ms": (
-                                    settings.openai_realtime_silence_ms
-                                ),
-                            },
+                            "turn_detection": turn_detection,
                         }
                     },
                     # Invented text comes back with low token probability.
