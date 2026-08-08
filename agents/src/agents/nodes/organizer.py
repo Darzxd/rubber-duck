@@ -1,9 +1,12 @@
 import json
+import logging
 import re
+import time
 import uuid
 
 from openai import AsyncOpenAI
 
+from agents.bus import emit
 from agents.organizer_buffer import (
     append,
     replace,
@@ -12,6 +15,15 @@ from agents.organizer_buffer import (
 )
 from agents.settings import get_settings
 from agents.state import GraphState, TranscriptChunk
+
+logger = logging.getLogger("agents.organizer")
+
+# An ongoing thread whose first chunk is older than this gets dispatched
+# anyway — a board that fills late beats one that never fills.
+FORCE_SETTLE_SEC = 20.0
+
+# Token ceiling for the rolling buffer of unsettled chunks.
+MAX_BUFFER_CHUNKS = 24
 
 # Cheap filter — drops obvious noise before spending a token. Laughter,
 # fillers, single-word backchannels.
@@ -65,11 +77,25 @@ async def organizer(state: GraphState) -> dict:
     session_id = state["session_id"]
 
     if _is_noise(chunk):
+        await emit(
+            session_id,
+            "organizer.status",
+            {"stage": "noise_dropped", "text": chunk["text"]},
+        )
         return {"dispatch": []}
 
     append(session_id, chunk)
 
     if not should_organize(session_id):
+        await emit(
+            session_id,
+            "organizer.status",
+            {
+                "stage": "buffered",
+                "text": chunk["text"],
+                "buffer": len(snapshot(session_id)),
+            },
+        )
         return {"dispatch": []}
 
     settings = get_settings()
@@ -101,24 +127,51 @@ async def organizer(state: GraphState) -> dict:
         content = resp.choices[0].message.content or "{}"
         data = json.loads(content)
     except Exception:
-        # Keep the buffer as-is so the next chunk retries.
+        logger.exception("organizer LLM call failed, keeping buffer")
         return {"dispatch": []}
 
     threads = data.get("threads", [])
+    settled = [t for t in threads if t.get("settled") and t.get("chunk_ids")]
+    ongoing = [
+        t for t in threads if not t.get("settled") and t.get("chunk_ids")
+    ]
 
-    # Chunks used by any thread (settled or ongoing) leave the raw buffer.
-    # Settled → dispatched now. Ongoing → we could keep them, but re-showing
-    # them to the LLM every cycle wastes tokens; drop and let the next
-    # organize call see fresh chunks if the topic continues.
-    used_ids: set[int] = set()
-    for t in threads:
+    now = time.time()
+    for t in ongoing[:]:
+        ids = [i for i in t["chunk_ids"] if 0 <= i < len(chunks)]
+        if ids and now - chunks[ids[0]]["ts"] >= FORCE_SETTLE_SEC:
+            settled.append(t)
+            ongoing.remove(t)
+
+    # Settled chunks are dispatched; chunks in no thread were judged noise
+    # and dropped. Only ongoing-thread chunks stay for the next cycle.
+    keep_ids: set[int] = set()
+    for t in ongoing:
         for cid in t.get("chunk_ids", []) or []:
-            used_ids.add(cid)
+            keep_ids.add(cid)
 
-    remaining = [c for i, c in enumerate(chunks) if i not in used_ids]
+    remaining = [c for i, c in enumerate(chunks) if i in keep_ids]
+    remaining = remaining[-MAX_BUFFER_CHUNKS:]
     replace(session_id, remaining)
 
-    settled = [t for t in threads if t.get("settled") and t.get("chunk_ids")]
+    logger.info(
+        "organized session=%s chunks=%d settled=%d ongoing=%d",
+        session_id, len(chunks), len(settled), len(ongoing),
+    )
+    await emit(
+        session_id,
+        "organizer.status",
+        {
+            "stage": "organized",
+            "chunks": len(chunks),
+            "kept": len(remaining),
+            "threads": [
+                {"topic": t.get("topic", ""), "settled": bool(t in settled)}
+                for t in settled + ongoing
+            ],
+        },
+    )
+
     if not settled:
         return {"dispatch": []}
 
