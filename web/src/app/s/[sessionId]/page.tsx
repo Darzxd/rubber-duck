@@ -2,12 +2,16 @@
 
 import { Suspense, use, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PortalProvider } from "@portalsdk/react";
 import BoardGraph from "@/components/canvas/BoardGraph";
 import Whiteboard from "@/components/canvas/Whiteboard";
+import type { Author } from "@/components/canvas/authors";
 import TranscriptOverlay from "@/components/debug/TranscriptOverlay";
 import JoinScreen from "@/components/session/JoinScreen";
+import PresenceLayer from "@/components/session/PresenceLayer";
 import ShareModal from "@/components/session/ShareModal";
 import { useBoardEvents } from "@/lib/board";
+import { portal } from "@/lib/portal";
 import { useSession } from "@/lib/session";
 
 type PageProps = {
@@ -54,15 +58,18 @@ function BoardView({
     author: name,
   });
   const board = useBoardEvents(sessionId);
+  const [people, setPeople] = useState<Author[]>([]);
 
   return (
     <>
       <Whiteboard
         sessionName={`Pizarra ${sessionId}`}
+        authors={people}
         onShare={onOpenShareModal}
       >
         <BoardGraph board={board} />
       </Whiteboard>
+      <PresenceLayer sessionId={sessionId} name={name} onRoster={setPeople} />
       <TranscriptOverlay
         recording={recording}
         supported={supported}
@@ -109,8 +116,10 @@ function SessionInner({ sessionId }: { sessionId: string }) {
 export default function SessionPage({ params }: PageProps) {
   const { sessionId } = use(params);
   return (
-    <Suspense fallback={null}>
-      <SessionInner sessionId={sessionId} />
-    </Suspense>
+    <PortalProvider client={portal}>
+      <Suspense fallback={null}>
+        <SessionInner sessionId={sessionId} />
+      </Suspense>
+    </PortalProvider>
   );
 }
