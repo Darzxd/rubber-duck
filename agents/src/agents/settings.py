@@ -11,6 +11,8 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_realtime_model: str = "gpt-4o-transcribe"
+    openai_realtime_language: str = "es"
 
     portal_secret: str = ""
     portal_api_url: str = "https://api.useportal.co"

@@ -1,13 +1,15 @@
 import asyncio
 import json
 
-from fastapi import FastAPI, Request
+import httpx
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agents.bus import subscribe, unsubscribe
 from agents.graph import graph
+from agents.settings import get_settings
 from agents.state import TranscriptChunk
 
 app = FastAPI(title="rubber-duck agents")
@@ -48,6 +50,45 @@ async def ingest(req: IngestRequest) -> dict:
         }
     )
     return {"accepted": True}
+
+
+@app.post("/realtime-session")
+async def realtime_session() -> dict:
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(500, "OPENAI_API_KEY is not set")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.post(
+            "https://api.openai.com/v1/realtime/client_secrets",
+            headers={
+                "Authorization": f"Bearer {settings.openai_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "session": {
+                    "type": "transcription",
+                    "audio": {
+                        "input": {
+                            "transcription": {
+                                "model": settings.openai_realtime_model,
+                                "language": settings.openai_realtime_language,
+                            },
+                            "turn_detection": {
+                                "type": "server_vad",
+                                "threshold": 0.5,
+                                "prefix_padding_ms": 300,
+                                "silence_duration_ms": 600,
+                            },
+                        }
+                    },
+                }
+            },
+        )
+
+    if r.status_code >= 400:
+        raise HTTPException(r.status_code, f"openai realtime mint failed: {r.text}")
+    return r.json()
 
 
 @app.get("/events/{session_id}")
