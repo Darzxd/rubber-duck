@@ -83,7 +83,7 @@ export default function SidePanel({
         </button>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="no-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
         {tab === "agents" ? (
           <div className="space-y-2">
             {agents.map((agent) => (

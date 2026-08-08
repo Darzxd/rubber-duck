@@ -96,6 +96,16 @@ body {
   will-change: transform, opacity;
 }
 
+/* Scrolls normally, just without drawing the bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Agent activity meters: a bar that breathes, and a pulse that slides. */
 @keyframes meter-wave {
   0%,
