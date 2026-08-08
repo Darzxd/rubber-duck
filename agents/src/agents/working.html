@@ -57,6 +57,21 @@
   .chip.settled { border-color: var(--green); color: var(--green); }
   .chip.ongoing { border-color: var(--amber); color: var(--amber); }
 
+  .thread {
+    display: inline-block; vertical-align: top; width: 22rem; margin: 0 0.5rem 0.5rem 0;
+    background: var(--panel); border: 1px solid var(--line); border-left-width: 3px;
+    border-radius: 8px; padding: 0.6rem 0.8rem;
+  }
+  .thread.settled { border-left-color: var(--green); }
+  .thread.ongoing { border-left-color: var(--amber); }
+  .thread .thead { font-size: 0.8rem; font-weight: 700; display: flex; justify-content: space-between; gap: 0.5rem; }
+  .thread.settled .thead { color: var(--green); }
+  .thread.ongoing .thead { color: var(--amber); }
+  .thread .who2 { font-weight: 400; font-size: 0.65rem; color: var(--dim); }
+  .thread .want { font-size: 0.72rem; color: var(--fg); margin-top: 0.35rem; line-height: 1.4; }
+  .thread .want b { color: var(--blue); }
+  .log li.settled b { color: var(--green); }
+
   .line { font-size: 0.78rem; padding: 0.35rem 0; border-bottom: 1px solid #21262d; line-height: 1.45; }
   .line:last-child { border-bottom: 0; }
   .line .who { color: var(--blue); font-weight: 700; }
@@ -120,7 +135,7 @@
   </div>
 
   <div>
-    <h2>Threads · last organize</h2>
+    <h2>Live threads · what the organizer is tracking</h2>
     <div id="threads"><span class="empty">nothing yet</span></div>
   </div>
 
@@ -230,26 +245,48 @@
             match.insertAdjacentHTML("beforeend", '<span class="tag">noise</span>');
           }
           log("noise", `dropped "${c.text}"`, sid);
-        } else if (c.stage === "buffered") {
-          $("c-buffer").textContent = c.buffer;
+        } else if (c.stage === "queued") {
+          $("c-buffer").textContent = c.pending;
           flash("st-buffer");
-          log("buffer", `"${c.text}" (${c.buffer} waiting)`, sid);
+        } else if (c.stage === "dropped") {
+          for (const text of c.texts || []) {
+            counts.noise++;
+            const match = [...$("transcript").children].find(
+              (n) => n.dataset && n.dataset.text === text);
+            if (match) {
+              match.classList.add("dropped");
+              match.insertAdjacentHTML("beforeend", '<span class="tag">discarded</span>');
+            }
+            log("noise", `discarded "${text}"`, sid);
+          }
+          $("c-noise").textContent = counts.noise;
+          flash("st-filter");
         } else if (c.stage === "organized") {
           counts.organized++;
           $("c-organized").textContent = counts.organized;
-          $("c-buffer").textContent = c.kept;
+          $("c-buffer").textContent = c.pending ?? 0;
           flash("st-organizer");
           const threads = c.threads || [];
           $("threads").innerHTML = threads.length
-            ? threads.map((t) =>
-                `<span class="chip ${t.settled ? "settled" : "ongoing"}">` +
-                `${t.settled ? "●" : "○"} ${t.topic}</span>`).join("")
-            : '<span class="empty">all discarded</span>';
+            ? threads.map((t) => {
+                const wants = (t.intents || []).map((i) =>
+                  `<div class="want"><b>${i.author}</b> quiere ${i.wants}</div>`).join("");
+                return `<div class="thread ${t.settled ? "settled" : "ongoing"}">` +
+                  `<div class="thead">${t.settled ? "●" : "○"} ${t.topic}` +
+                  `<span class="who2">${(t.participants || []).join(", ")}</span></div>` +
+                  wants + `</div>`;
+              }).join("")
+            : '<span class="empty">nothing worth tracking yet</span>';
           log("organize",
             `${c.chunks} chunks → ` + (threads.length
               ? threads.map((t) => `${t.topic} [${t.settled ? "settled" : "ongoing"}]`).join(", ")
               : "nothing worth keeping"), sid);
         }
+        return;
+      }
+
+      if (p.event === "organizer.settled") {
+        log("settled", `${c.topic} — ${c.summary}`, sid);
         return;
       }
 

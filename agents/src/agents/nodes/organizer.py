@@ -2,28 +2,15 @@ import json
 import logging
 import re
 import time
-import uuid
 
 from openai import AsyncOpenAI
 
+from agents import organizer_store as store
 from agents.bus import emit
-from agents.organizer_buffer import (
-    append,
-    replace,
-    should_organize,
-    snapshot,
-)
 from agents.settings import get_settings
-from agents.state import GraphState, TranscriptChunk
+from agents.state import Thread, TranscriptChunk
 
 logger = logging.getLogger("agents.organizer")
-
-# An ongoing thread whose first chunk is older than this gets dispatched
-# anyway — a board that fills late beats one that never fills.
-FORCE_SETTLE_SEC = 20.0
-
-# Token ceiling for the rolling buffer of unsettled chunks.
-MAX_BUFFER_CHUNKS = 24
 
 # Cheap filter — drops obvious noise before spending a token. Laughter,
 # fillers, single-word backchannels.
@@ -34,8 +21,12 @@ _FILLERS = {
     "mm", "mhm", "uf", "uy", "ah", "oh", "eee", "pues",
 }
 
+# How much of a thread we replay to the model. Enough to revise it, not so
+# much that a long thread dominates the prompt.
+RECENT_CHUNKS = 8
 
-def _is_noise(chunk: TranscriptChunk) -> bool:
+
+def is_noise(chunk: TranscriptChunk) -> bool:
     text = chunk["text"].strip().lower()
     if not text:
         return True
@@ -48,71 +39,75 @@ def _is_noise(chunk: TranscriptChunk) -> bool:
     return False
 
 
-SYSTEM_PROMPT = """Sos el Organizer de una pizarra colaborativa en vivo. Varias personas hablan y todo se transcribe. Tu tarea: convertir el caos en hilos temáticos que los demás agentes (Architect, Critic, Scribe) puedan procesar.
+SYSTEM_PROMPT = """Sos el Organizer de una pizarra colaborativa en vivo. Escuchás una reunión y mantenés, en todo momento, una lista de HILOS abiertos. No procesás frases sueltas: revisás y corregís tu propia lista cada vez que llega algo nuevo.
 
-IMPORTANTE — el texto viene de reconocimiento de voz automático, así que:
-- Llega cortado a mitad de frase. Dos chunks seguidos suelen ser UNA sola idea: unilos.
-- Tiene errores de transcripción. Si una palabra no encaja pero suena parecida a algo que sí encaja en el contexto técnico, asumí la corrección (ej. "agente OS" → "agente Ops", "sauna" → algo que rime en contexto). Si un chunk es puro ruido incomprensible, descartalo.
-- No cites el texto literal: reconstruí lo que la persona quiso decir.
+EL TEXTO VIENE DE RECONOCIMIENTO DE VOZ:
+- Llega cortado a mitad de frase. Chunks seguidos suelen ser UNA sola idea: unilos.
+- Tiene errores. Si una palabra no encaja pero suena parecida a algo que sí encaja en el contexto técnico, corregila mentalmente.
+- No cites literal: reconstruí lo que la persona quiso decir.
 
-Dados los chunks de transcripción recientes:
-1. Descartá lo que no vale — risas, muletillas, backchannels, respuestas monosilábicas sin contenido, y fragmentos ininteligibles.
-2. Agrupá los chunks relacionados en "hilos" temáticos. Un hilo es una mini-conversación sobre una idea, decisión, pregunta o tema concreto.
-3. Marcá cada hilo como SETTLED (los participantes ya se movieron a otro tema o hubo pausa) o ONGOING (todavía se está discutiendo).
+QUÉ RECIBÍS:
+- `threads`: los hilos que ya venías siguiendo, con su id.
+- `new_chunks`: lo que se dijo desde tu última pasada.
 
-Sé estricto: si un hilo tiene solo 1 chunk y es débil, descartalo. Solo devolvé hilos con sustancia real.
+QUÉ TENÉS QUE HACER, en este orden:
+1. Asigná cada chunk nuevo a un hilo existente (por su id) si continúa ese tema. Solo abrí un hilo nuevo si de verdad es otro tema.
+2. Revisá los hilos que tocaste: si ahora entendés mejor de qué se trata, REESCRIBÍ su topic y su summary. Un hilo mejora a medida que la gente habla.
+3. Por cada participante del hilo, anotá qué quiere concretamente (`intents`). Ej: "Ignacio quiere un diagrama del core bancario conectado a IA". Si alguien solo acompaña, no lo anotes.
+4. Anotá las preguntas que quedaron abiertas (`open_questions`), si las hay.
+5. Marcá `settled` SOLO cuando el tema está lo bastante desarrollado como para dibujarlo y la conversación ya se movió a otra cosa. Un hilo con una sola frase trivial NO se marca settled: se descarta.
+
+DESCARTAR (`drop`): charla de prueba del sistema ("probando", "esta sesión cuál es", "se escucha?"), saludos, risas, y cualquier hilo sin sustancia. Es preferible descartar que dibujar basura.
+
+PRIORIDAD: lo que importa es la sustancia del producto — ideas, decisiones, arquitectura, problemas, propuestas. La charla operativa sobre la propia herramienta casi nunca merece un hilo.
 
 Formato de salida (JSON, sin prosa alrededor):
 {
   "threads": [
     {
+      "id": "id existente, o null si es nuevo",
       "topic": "título de 3-6 palabras",
-      "chunk_ids": [índices 0-based en orden],
-      "summary": "una oración de qué se dijo",
-      "settled": true | false
+      "summary": "2 oraciones de qué se está discutiendo y a dónde va",
+      "intents": [{"author": "nombre", "wants": "qué quiere, concreto"}],
+      "open_questions": ["pregunta sin responder"],
+      "settled": true | false,
+      "chunk_ids": [índices 0-based de new_chunks que caen en este hilo]
     }
-  ]
-}
+  ],
+  "drop": [índices de new_chunks que no valen nada]
+}"""
 
-Si no hay nada que valga la pena, devolvé {"threads": []}."""
+
+def _thread_view(t: Thread) -> dict:
+    return {
+        "id": t["id"],
+        "topic": t["topic"],
+        "summary": t["summary"],
+        "intents": t["intents"],
+        "participants": t["participants"],
+        "recent": [
+            f"{c['author']}: {c['text']}" for c in t["chunks"][-RECENT_CHUNKS:]
+        ],
+        "seconds_quiet": round(time.time() - t["last_touched"], 1),
+    }
 
 
-async def organizer(state: GraphState) -> dict:
-    chunk = state["incoming"]
-    session_id = state["session_id"]
-
-    if _is_noise(chunk):
-        await emit(
-            session_id,
-            "organizer.status",
-            {"stage": "noise_dropped", "text": chunk["text"]},
-        )
-        return {"dispatch": []}
-
-    append(session_id, chunk)
-
-    if not should_organize(session_id):
-        await emit(
-            session_id,
-            "organizer.status",
-            {
-                "stage": "buffered",
-                "text": chunk["text"],
-                "buffer": len(snapshot(session_id)),
-            },
-        )
-        return {"dispatch": []}
-
+async def reconcile(
+    session_id: str, new_chunks: list[TranscriptChunk]
+) -> list[Thread]:
+    """Fold new speech into the live thread list. Returns threads that just
+    became settled and are ready to dispatch."""
     settings = get_settings()
     if not settings.openai_api_key:
-        return {"dispatch": []}
+        return []
 
-    chunks = snapshot(session_id)
+    open_threads = store.ongoing(session_id)
     payload = {
-        "chunks": [
-            {"i": i, "author": c["author"], "text": c["text"], "ts": c["ts"]}
-            for i, c in enumerate(chunks)
-        ]
+        "threads": [_thread_view(t) for t in open_threads],
+        "new_chunks": [
+            {"i": i, "author": c["author"], "text": c["text"]}
+            for i, c in enumerate(new_chunks)
+        ],
     }
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -129,71 +124,92 @@ async def organizer(state: GraphState) -> dict:
             response_format={"type": "json_object"},
             temperature=0.2,
         )
-        content = resp.choices[0].message.content or "{}"
-        data = json.loads(content)
+        data = json.loads(resp.choices[0].message.content or "{}")
     except Exception:
-        logger.exception("organizer LLM call failed, keeping buffer")
-        return {"dispatch": []}
-
-    threads = data.get("threads", [])
-    settled = [t for t in threads if t.get("settled") and t.get("chunk_ids")]
-    ongoing = [
-        t for t in threads if not t.get("settled") and t.get("chunk_ids")
-    ]
+        logger.exception("organizer reconcile failed; chunks stay pending")
+        # Put them back so the next tick retries instead of losing speech.
+        for c in new_chunks:
+            store.add_chunk(session_id, c)
+        return []
 
     now = time.time()
-    for t in ongoing[:]:
-        ids = [i for i in t["chunk_ids"] if 0 <= i < len(chunks)]
-        if ids and now - chunks[ids[0]]["ts"] >= FORCE_SETTLE_SEC:
-            settled.append(t)
-            ongoing.remove(t)
+    ready: list[Thread] = []
 
-    # Settled chunks are dispatched; chunks in no thread were judged noise
-    # and dropped. Only ongoing-thread chunks stay for the next cycle.
-    keep_ids: set[int] = set()
-    for t in ongoing:
-        for cid in t.get("chunk_ids", []) or []:
-            keep_ids.add(cid)
+    for spec in data.get("threads", []):
+        ids = [
+            i for i in (spec.get("chunk_ids") or []) if 0 <= i < len(new_chunks)
+        ]
+        joined = [new_chunks[i] for i in ids]
 
-    remaining = [c for i, c in enumerate(chunks) if i in keep_ids]
-    remaining = remaining[-MAX_BUFFER_CHUNKS:]
-    replace(session_id, remaining)
+        tid = spec.get("id")
+        existing = store.get(session_id).threads.get(tid) if tid else None
 
-    logger.info(
-        "organized session=%s chunks=%d settled=%d ongoing=%d",
-        session_id, len(chunks), len(settled), len(ongoing),
-    )
+        if existing is None:
+            if not joined:
+                continue
+            existing = Thread(
+                id=store.new_thread_id(),
+                topic="",
+                summary="",
+                chunks=[],
+                participants=[],
+                intents=[],
+                status="ongoing",
+                created_at=now,
+                last_touched=now,
+                dispatched=False,
+            )
+
+        existing["chunks"] = existing["chunks"] + joined
+        existing["topic"] = spec.get("topic") or existing["topic"]
+        existing["summary"] = spec.get("summary") or existing["summary"]
+        existing["intents"] = spec.get("intents") or existing["intents"]
+        existing["open_questions"] = spec.get("open_questions") or []
+        existing["participants"] = sorted(
+            {c["author"] for c in existing["chunks"]}
+        )
+        if joined:
+            existing["last_touched"] = now
+
+        if spec.get("settled") and not existing["dispatched"]:
+            existing["status"] = "settled"
+            ready.append(existing)
+
+        store.upsert_thread(session_id, existing)
+
+    dropped = [
+        new_chunks[i]
+        for i in (data.get("drop") or [])
+        if 0 <= i < len(new_chunks)
+    ]
+    if dropped:
+        await emit(
+            session_id,
+            "organizer.status",
+            {
+                "stage": "dropped",
+                "texts": [c["text"] for c in dropped],
+            },
+        )
+
     await emit(
         session_id,
         "organizer.status",
         {
             "stage": "organized",
-            "chunks": len(chunks),
-            "kept": len(remaining),
+            "chunks": len(new_chunks),
+            "pending": len(store.get(session_id).pending),
             "threads": [
-                {"topic": t.get("topic", ""), "settled": bool(t in settled)}
-                for t in settled + ongoing
+                {
+                    "id": t["id"],
+                    "topic": t["topic"],
+                    "settled": t["status"] == "settled",
+                    "intents": t["intents"],
+                    "participants": t["participants"],
+                }
+                for t in store.get(session_id).threads.values()
             ],
         },
     )
 
-    if not settled:
-        return {"dispatch": []}
-
-    # Dispatch the first settled thread. Multiple settled threads on the same
-    # turn is rare; if it happens we drop the extras (fanout comes later).
-    first = settled[0]
-    thread_chunks = [
-        chunks[i] for i in first["chunk_ids"] if 0 <= i < len(chunks)
-    ]
-
-    return {
-        "settled_thread": {
-            "id": f"th_{uuid.uuid4().hex[:8]}",
-            "chunks": thread_chunks,
-            "settled": True,
-            "topic": first.get("topic", ""),
-            "summary": first.get("summary", ""),
-        },
-        "dispatch": ["architect"],
-    }
+    return ready

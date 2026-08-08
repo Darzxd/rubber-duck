@@ -9,10 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from agents import organizer_loop, organizer_store
 from agents.bus import emit, sessions, subscribe, unsubscribe
 from agents.graph import graph
 from agents.settings import get_settings
-from agents.state import TranscriptChunk
+from agents.state import Thread, TranscriptChunk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agents.api")
@@ -52,6 +53,16 @@ async def list_sessions() -> dict:
     return {"sessions": sessions()}
 
 
+async def _dispatch(session_id: str, thread: Thread) -> None:
+    await graph.ainvoke(
+        {
+            "session_id": session_id,
+            "thread": thread,
+            "dispatch": ["architect"],
+        }
+    )
+
+
 @app.post("/ingest")
 async def ingest(req: IngestRequest) -> dict:
     chunk: TranscriptChunk = {"author": req.author, "text": req.text, "ts": req.ts}
@@ -63,16 +74,27 @@ async def ingest(req: IngestRequest) -> dict:
         "ingest.received",
         {"author": req.author, "text": req.text},
     )
-    await graph.ainvoke(
-        {
-            "session_id": req.session_id,
-            "incoming": chunk,
-            "buffer": [],
-            "settled_thread": None,
-            "dispatch": [],
-        }
-    )
-    return {"accepted": True}
+
+    # Ingest only queues. The Organizer loop listens on its own clock, so a
+    # slow model call never holds up the next thing somebody says.
+    organizer_loop.ensure_running(req.session_id, _dispatch)
+    kept = organizer_loop.submit(req.session_id, chunk)
+    if not kept:
+        await emit(
+            req.session_id,
+            "organizer.status",
+            {"stage": "noise_dropped", "text": req.text},
+        )
+    else:
+        await emit(
+            req.session_id,
+            "organizer.status",
+            {
+                "stage": "queued",
+                "pending": len(organizer_store.get(req.session_id).pending),
+            },
+        )
+    return {"accepted": True, "queued": kept}
 
 
 @app.post("/realtime-session")

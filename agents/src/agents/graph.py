@@ -2,28 +2,31 @@ from langgraph.graph import END, START, StateGraph
 
 from agents.nodes.architect import architect
 from agents.nodes.critic import critic
-from agents.nodes.organizer import organizer
 from agents.nodes.scribe import scribe
 from agents.state import GraphState
 
 
-def _route_from_organizer(state: GraphState) -> list[str]:
-    if not state["dispatch"]:
-        return [END]
-    return list(state["dispatch"])
+async def _entry(state: GraphState) -> dict:
+    return {}
+
+
+def _route(state: GraphState) -> list[str]:
+    return list(state["dispatch"]) or [END]
 
 
 def build_graph():
     g = StateGraph(GraphState)
-    g.add_node("organizer", organizer)
+    # The Organizer is no longer a graph node: it runs as a background loop
+    # per session and feeds settled threads in here.
+    g.add_node("entry", _entry)
     g.add_node("architect", architect)
     g.add_node("critic", critic)
     g.add_node("scribe", scribe)
 
-    g.add_edge(START, "organizer")
+    g.add_edge(START, "entry")
     g.add_conditional_edges(
-        "organizer",
-        _route_from_organizer,
+        "entry",
+        _route,
         ["architect", "critic", "scribe", END],
     )
     g.add_edge("architect", END)
