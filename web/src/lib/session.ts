@@ -38,39 +38,63 @@ export function useSession({ sessionId, author }: SessionArgs): SessionState {
       return;
     }
 
-    const controller = createRecognition({
-      onInterim: (text) => setInterim(text),
-      onFinal: (text) => {
-        const chunk: Chunk = {
-          id: `${Date.now()}-${seqRef.current++}`,
-          author,
-          text,
-          ts: Date.now() / 1000,
-        };
-        setInterim("");
-        setChunks((prev) => [...prev.slice(-49), chunk]);
-        void postIngest({
-          sessionId,
-          author,
-          text: chunk.text,
-          ts: chunk.ts,
-        }).catch((e: unknown) => {
-          setError(e instanceof Error ? e.message : "ingest failed");
-        });
-      },
-      onError: (message) => setError(message),
-    });
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let controller: ReturnType<typeof createRecognition> = null;
 
-    if (!controller) {
-      setSupported(false);
-      return;
-    }
+    // Hold a MediaStream open alongside recognition. SpeechRecognition
+    // internally cycles the audio pipeline (silence timeouts, no-speech,
+    // Chrome's ~60s cap) — without a parallel stream the OS mic indicator
+    // flickers on/off every restart.
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        if (!cancelled) setError("microphone permission denied");
+        return;
+      }
+      if (cancelled) {
+        stream?.getTracks().forEach((t) => t.stop());
+        return;
+      }
 
-    controller.start();
-    setRecording(true);
+      controller = createRecognition({
+        onInterim: (text) => setInterim(text),
+        onFinal: (text) => {
+          const chunk: Chunk = {
+            id: `${Date.now()}-${seqRef.current++}`,
+            author,
+            text,
+            ts: Date.now() / 1000,
+          };
+          setInterim("");
+          setChunks((prev) => [...prev.slice(-49), chunk]);
+          void postIngest({
+            sessionId,
+            author,
+            text: chunk.text,
+            ts: chunk.ts,
+          }).catch((e: unknown) => {
+            setError(e instanceof Error ? e.message : "ingest failed");
+          });
+        },
+        onError: (message) => setError(message),
+      });
+
+      if (!controller) {
+        setSupported(false);
+        stream?.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      controller.start();
+      setRecording(true);
+    })();
 
     return () => {
-      controller.stop();
+      cancelled = true;
+      controller?.stop();
+      stream?.getTracks().forEach((t) => t.stop());
       setRecording(false);
     };
   }, [sessionId, author]);
