@@ -15,14 +15,15 @@ type FloatingObject = {
   id: string;
   Shape: ComponentType<ShapeProps>;
   color: string;
-  /** Percent of the stage. Kept off the centre so copy stays readable. */
+  /** Where the circuit starts, in percent of the stage. */
   left: number;
   top: number;
   size: string;
   opacity: number;
-  dx: string;
-  dy: string;
-  dr: string;
+  /** How far the object travels, in viewport units. */
+  tx: string;
+  ty: string;
+  r: string;
   dur: string;
   delay: string;
   /** Dropped on narrow screens, where the centre column eats the margins. */
@@ -39,22 +40,23 @@ const CYAN = "#0ea5b7";
 
 /**
  * Fixed layout on purpose: random positions would differ between the server and
- * the client render and break hydration.
+ * the client render and break hydration. Long, mismatched durations keep the
+ * field from ever repeating the same arrangement.
  */
 const OBJECTS: FloatingObject[] = [
-  { id: "robot-l", Shape: RobotHead, color: INDIGO, left: 7, top: 17, size: "size-16", opacity: 0.7, dx: "10px", dy: "-28px", dr: "-7deg", dur: "15s", delay: "0s" },
-  { id: "circle-l", Shape: CircleShape, color: AMBER, left: 16, top: 41, size: "size-11", opacity: 0.65, dx: "-12px", dy: "22px", dr: "9deg", dur: "12s", delay: "-3s" },
-  { id: "triangle-l", Shape: TriangleShape, color: GREEN, left: 8, top: 67, size: "size-12", opacity: 0.6, dx: "14px", dy: "-20px", dr: "12deg", dur: "17s", delay: "-6s" },
-  { id: "cursor-l", Shape: CursorShape, color: RED, left: 22, top: 23, size: "size-9", opacity: 0.75, dx: "-9px", dy: "18px", dr: "-10deg", dur: "11s", delay: "-1.5s" },
-  { id: "sticky-l", Shape: StickyNote, color: MAGENTA, left: 5, top: 85, size: "size-13", opacity: 0.55, dx: "12px", dy: "-16px", dr: "8deg", dur: "16s", delay: "-8s", wideOnly: true },
-  { id: "node-l", Shape: NodeCard, color: INK, left: 21, top: 89, size: "size-14", opacity: 0.5, dx: "-14px", dy: "-22px", dr: "-6deg", dur: "13s", delay: "-4s", wideOnly: true },
-  { id: "circle-r", Shape: CircleShape, color: INDIGO, left: 71, top: 11, size: "size-10", opacity: 0.6, dx: "12px", dy: "20px", dr: "-9deg", dur: "14s", delay: "-2s" },
-  { id: "node-r", Shape: NodeCard, color: GREEN, left: 83, top: 21, size: "size-15", opacity: 0.65, dx: "-10px", dy: "-24px", dr: "7deg", dur: "18s", delay: "-7s" },
-  { id: "square-r", Shape: SquareShape, color: RED, left: 91, top: 47, size: "size-11", opacity: 0.6, dx: "-13px", dy: "18px", dr: "-11deg", dur: "12s", delay: "-5s" },
-  { id: "cursor-r", Shape: CursorShape, color: AMBER, left: 77, top: 69, size: "size-9", opacity: 0.75, dx: "11px", dy: "-19px", dr: "10deg", dur: "10s", delay: "-2.5s" },
-  { id: "robot-r", Shape: RobotHead, color: CYAN, left: 88, top: 81, size: "size-14", opacity: 0.6, dx: "-11px", dy: "-26px", dr: "6deg", dur: "16s", delay: "-9s", wideOnly: true },
-  { id: "connector-r", Shape: Connector, color: MAGENTA, left: 67, top: 90, size: "size-12", opacity: 0.5, dx: "13px", dy: "16px", dr: "-8deg", dur: "15s", delay: "-6.5s", wideOnly: true },
-  { id: "triangle-tr", Shape: TriangleShape, color: INK, left: 95, top: 9, size: "size-9", opacity: 0.45, dx: "-9px", dy: "22px", dr: "13deg", dur: "13s", delay: "-3.5s", wideOnly: true },
+  { id: "robot-l", Shape: RobotHead, color: INDIGO, left: 7, top: 17, size: "size-16", opacity: 0.7, tx: "14vw", ty: "14vh", r: "-8deg", dur: "58s", delay: "0s" },
+  { id: "circle-l", Shape: CircleShape, color: AMBER, left: 16, top: 41, size: "size-11", opacity: 0.65, tx: "-9vw", ty: "-16vh", r: "12deg", dur: "46s", delay: "-11s" },
+  { id: "triangle-l", Shape: TriangleShape, color: GREEN, left: 8, top: 67, size: "size-12", opacity: 0.6, tx: "17vw", ty: "-13vh", r: "14deg", dur: "63s", delay: "-24s" },
+  { id: "cursor-l", Shape: CursorShape, color: RED, left: 22, top: 23, size: "size-9", opacity: 0.75, tx: "-11vw", ty: "17vh", r: "-12deg", dur: "41s", delay: "-6s" },
+  { id: "sticky-l", Shape: StickyNote, color: MAGENTA, left: 5, top: 85, size: "size-13", opacity: 0.55, tx: "13vw", ty: "-15vh", r: "9deg", dur: "55s", delay: "-31s", wideOnly: true },
+  { id: "node-l", Shape: NodeCard, color: INK, left: 21, top: 89, size: "size-14", opacity: 0.5, tx: "-12vw", ty: "-18vh", r: "-7deg", dur: "68s", delay: "-17s", wideOnly: true },
+  { id: "circle-r", Shape: CircleShape, color: INDIGO, left: 71, top: 11, size: "size-10", opacity: 0.6, tx: "12vw", ty: "16vh", r: "-10deg", dur: "50s", delay: "-8s" },
+  { id: "node-r", Shape: NodeCard, color: GREEN, left: 83, top: 21, size: "size-15", opacity: 0.65, tx: "-15vw", ty: "-12vh", r: "8deg", dur: "61s", delay: "-27s" },
+  { id: "square-r", Shape: SquareShape, color: RED, left: 91, top: 47, size: "size-11", opacity: 0.6, tx: "-13vw", ty: "14vh", r: "-13deg", dur: "44s", delay: "-19s" },
+  { id: "cursor-r", Shape: CursorShape, color: AMBER, left: 77, top: 69, size: "size-9", opacity: 0.75, tx: "11vw", ty: "-17vh", r: "11deg", dur: "39s", delay: "-3s" },
+  { id: "robot-r", Shape: RobotHead, color: CYAN, left: 88, top: 81, size: "size-14", opacity: 0.6, tx: "-14vw", ty: "-14vh", r: "7deg", dur: "57s", delay: "-35s", wideOnly: true },
+  { id: "connector-r", Shape: Connector, color: MAGENTA, left: 67, top: 90, size: "size-12", opacity: 0.5, tx: "15vw", ty: "12vh", r: "-9deg", dur: "66s", delay: "-22s", wideOnly: true },
+  { id: "triangle-tr", Shape: TriangleShape, color: INK, left: 95, top: 9, size: "size-9", opacity: 0.45, tx: "-10vw", ty: "19vh", r: "15deg", dur: "48s", delay: "-14s", wideOnly: true },
 ];
 
 export default function FloatingObjects() {
@@ -72,9 +74,9 @@ export default function FloatingObjects() {
           top,
           size,
           opacity,
-          dx,
-          dy,
-          dr,
+          tx,
+          ty,
+          r,
           dur,
           delay,
           wideOnly,
@@ -88,13 +90,13 @@ export default function FloatingObjects() {
           >
             {/* The animation rides this div, not the SVG, so it stays on the GPU. */}
             <div
-              className="board-drift"
+              className="board-travel"
               style={
                 {
                   opacity,
-                  "--dx": dx,
-                  "--dy": dy,
-                  "--dr": dr,
+                  "--tx": tx,
+                  "--ty": ty,
+                  "--r": r,
                   "--dur": dur,
                   "--delay": delay,
                 } as React.CSSProperties

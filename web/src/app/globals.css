@@ -29,21 +29,40 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* Background objects drift on their own. Each one sets its own distance,
-   rotation, duration and delay so the field never falls into lockstep. */
-@keyframes board-drift {
-  0%,
+/* Background objects wander the screen on a closed circuit: the last keyframe
+   matches the first, so the loop restarts without a visible jump. Distances are
+   in vw/vh, so each object actually crosses ground instead of bobbing in place. */
+@keyframes board-travel {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(var(--tx, 16vw), var(--ty, -12vh), 0)
+      rotate(var(--r, 10deg));
+  }
+  50% {
+    transform: translate3d(
+        calc(var(--tx, 16vw) * 1.5),
+        calc(var(--ty, -12vh) * -1.2),
+        0
+      )
+      rotate(calc(var(--r, 10deg) * -0.9));
+  }
+  75% {
+    transform: translate3d(
+        calc(var(--tx, 16vw) * 0.4),
+        calc(var(--ty, -12vh) * 1.5),
+        0
+      )
+      rotate(calc(var(--r, 10deg) * 0.7));
+  }
   100% {
     transform: translate3d(0, 0, 0) rotate(0deg);
   }
-  50% {
-    transform: translate3d(var(--dx, 0px), var(--dy, -26px), 0)
-      rotate(var(--dr, 6deg));
-  }
 }
 
-.board-drift {
-  animation: board-drift var(--dur, 14s) ease-in-out var(--delay, 0s) infinite;
+.board-travel {
+  animation: board-travel var(--dur, 52s) ease-in-out var(--delay, 0s) infinite;
   will-change: transform;
 }
 
@@ -63,7 +82,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .board-drift,
+  .board-travel,
   .caret-blink {
     animation: none;
   }

@@ -11,36 +11,45 @@ const BOX = "0 0 48 48";
 export function RobotHead({ color, className }: ShapeProps) {
   return (
     <svg viewBox={BOX} className={className} aria-hidden="true" fill="none">
+      {/* Antenna: ball on top, stem down into the skull. */}
+      <circle cx="24" cy="3.6" r="2.3" fill={color} />
       <path
-        d="M24 4.5v5.5"
+        d="M24 5.9v3.6"
         stroke={color}
         strokeWidth={STROKE}
         strokeLinecap="round"
       />
-      <circle cx="24" cy="3.4" r="2.6" fill={color} />
+      {/* Skull. */}
       <rect
-        x="8.5"
-        y="10.5"
-        width="31"
+        x="9.5"
+        y="9.5"
+        width="29"
         height="27"
-        rx="7.5"
+        rx="8.5"
         stroke={color}
         strokeWidth={STROKE}
       />
-      <circle cx="18.5" cy="21.5" r="3.1" fill={color} />
-      <circle cx="29.5" cy="21.5" r="3.1" fill={color} />
+      {/* Visor holding both eyes — reads better than two loose dots. */}
+      <rect
+        x="14.5"
+        y="15"
+        width="19"
+        height="11.5"
+        rx="5.7"
+        stroke={color}
+        strokeWidth={STROKE}
+      />
+      <circle cx="19.8" cy="20.8" r="2.1" fill={color} />
+      <circle cx="28.2" cy="20.8" r="2.1" fill={color} />
       <path
-        d="M18.5 30.5h11"
+        d="M19.5 31.5h9"
         stroke={color}
         strokeWidth={STROKE}
         strokeLinecap="round"
       />
-      <path
-        d="M8.5 19.5h-4v8h4M39.5 19.5h4v8h-4"
-        stroke={color}
-        strokeWidth={STROKE}
-        strokeLinejoin="round"
-      />
+      {/* Ears as closed, solid bars. */}
+      <rect x="5" y="18.5" width="3.6" height="8.5" rx="1.8" fill={color} />
+      <rect x="39.4" y="18.5" width="3.6" height="8.5" rx="1.8" fill={color} />
     </svg>
   );
 }

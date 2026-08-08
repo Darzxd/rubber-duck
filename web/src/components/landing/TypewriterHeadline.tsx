@@ -67,9 +67,24 @@ export default function TypewriterHeadline({
   }, [length, isDeleting, prefersReducedMotion, phrase.length, phrases.length]);
 
   return (
-    <h1 className="flex min-h-[4.5rem] items-start justify-center text-balance text-3xl font-extrabold leading-[1.1] tracking-tight text-neutral-900 sm:min-h-[6.5rem] sm:text-5xl lg:min-h-[7.5rem] lg:text-6xl">
+    /**
+     * Every phrase is stacked in the same grid cell. The hidden copies still
+     * take up space, so the box is always as tall as the longest phrase at the
+     * current width — the headline can grow a line without shoving the page.
+     */
+    <h1 className="grid w-full justify-items-center text-balance text-3xl font-extrabold leading-[1.15] tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl">
+      {phrases.map((reserved) => (
+        <span
+          key={reserved}
+          aria-hidden="true"
+          className="invisible col-start-1 row-start-1"
+        >
+          {reserved}
+        </span>
+      ))}
+
       {/* Not announced: a live region would read out every single keystroke. */}
-      <span>
+      <span className="col-start-1 row-start-1">
         {prefersReducedMotion ? phrase : phrase.slice(0, length)}
         <span
           aria-hidden="true"
