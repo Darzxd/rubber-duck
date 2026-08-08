@@ -150,29 +150,16 @@ async def unsure(req: UnsureRequest) -> dict:
     return {"ok": True}
 
 
-def _turn_detection(vad: str, eagerness: str, silence_ms: int) -> dict:
-    if vad == "server_vad":
-        return {"type": "server_vad", "silence_duration_ms": silence_ms}
-    return {"type": "semantic_vad", "eagerness": eagerness}
-
-
 @app.post("/realtime-session")
-async def realtime_session(
-    vad: str | None = None,
-    eagerness: str | None = None,
-    silence_ms: int | None = None,
-) -> dict:
-    """Query params override the defaults so sensitivity can be compared live
-    from the URL, without a restart."""
+async def realtime_session() -> dict:
     settings = get_settings()
     if not settings.openai_api_key:
         raise HTTPException(500, "OPENAI_API_KEY is not set")
 
-    turn_detection = _turn_detection(
-        vad or settings.openai_realtime_vad,
-        eagerness or settings.openai_realtime_eagerness,
-        silence_ms or settings.openai_realtime_silence_ms,
-    )
+    turn_detection = {
+        "type": "semantic_vad",
+        "eagerness": settings.openai_realtime_eagerness,
+    }
     logger.info("realtime session turn_detection=%s", turn_detection)
 
     transcription: dict = {

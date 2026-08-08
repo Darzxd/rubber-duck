@@ -16,14 +16,10 @@ class Settings(BaseSettings):
     # never closes a segment — we need server VAD to get final transcripts.
     openai_realtime_model: str = "gpt-4o-transcribe"
     openai_realtime_language: str = "es"
-    # semantic_vad closes a segment when the speaker finished a thought, not
-    # when a timer runs out. A timer either cuts mid-sentence or makes you
-    # wait after every phrase; there is no good number.
-    openai_realtime_vad: str = "semantic_vad"
-    # How fast it is willing to cut. high ≈ 2s cap, medium ≈ 4s, low ≈ 8s.
-    openai_realtime_eagerness: str = "medium"
-    # Only used when vad is server_vad.
-    openai_realtime_silence_ms: int = 600
+    # Accuracy over speed: a whole thought in one segment transcribes far
+    # better than the same words cut into fragments, because each segment is
+    # transcribed without the context of the others.
+    openai_realtime_eagerness: str = "low"
     # Empty on purpose. The model treats this as preceding text and repeats it
     # verbatim on a short or noisy segment — a list of technologies came back
     # as "confirmamos el backend en Python?".

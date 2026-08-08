@@ -55,20 +55,9 @@ export async function startRealtimeTranscription(
   stream: MediaStream,
   callbacks: RealtimeCallbacks,
 ): Promise<RealtimeController> {
-  // Whatever tuning is in the page URL goes straight to the mint, so two tabs
-  // can run different sensitivities side by side.
-  const tuning = new URLSearchParams();
-  const pageParams = new URLSearchParams(window.location.search);
-  for (const key of ["vad", "eagerness", "silence_ms"]) {
-    const value = pageParams.get(key);
-    if (value) tuning.set(key, value);
-  }
-  const query = tuning.toString();
-
-  const sessionRes = await fetch(
-    `${AGENTS_URL}/realtime-session${query ? `?${query}` : ""}`,
-    { method: "POST" },
-  );
+  const sessionRes = await fetch(`${AGENTS_URL}/realtime-session`, {
+    method: "POST",
+  });
   if (!sessionRes.ok) {
     throw new Error(`realtime session mint failed: ${sessionRes.status}`);
   }
