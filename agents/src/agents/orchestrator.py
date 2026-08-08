@@ -2,7 +2,7 @@ import logging
 
 from agents.bus import emit
 from agents.graph import graph
-from agents.state import Agent, Digest, Point
+from agents.state import KINDS, Agent, Digest, Point
 
 logger = logging.getLogger("agents.orchestrator")
 
@@ -19,6 +19,9 @@ WANTS: dict[str, set[str]] = {
     # The Critic checks proposals against the repo. A question has nothing to
     # check yet, and a decision is already made.
     "critic": {"idea"},
+    # The Notetaker is the only agent that sees everything everyone said. Its
+    # job is ranking, and nothing can be ranked from a slice.
+    "notetaker": set(KINDS),
 }
 
 # The board and the lists are pictures of a whole state, so they are handed the
