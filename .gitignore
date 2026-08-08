@@ -31,3 +31,6 @@ pnpm-debug.log*
 .vscode/
 .idea/
 *.swp
+
+# claude code local settings
+.claude/settings.local.json
