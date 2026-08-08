@@ -21,96 +21,111 @@ DIM = "\033[2m"
 BOLD = "\033[1m"
 OFF = "\033[0m"
 
+KEYWORDS = ["Supabase", "Portal", "React Flow", "Vercel", "Next.js"]
+
+# Shapes taken from the realtime-transcription guide, not guessed.
 VARIANTS: dict[str, dict] = {
-    "current (gpt-4o-transcribe + server_vad)": {
-        "transcription": {"model": "gpt-4o-transcribe", "language": "es"},
-        "turn_detection": {"type": "server_vad", "silence_duration_ms": 600},
-    },
-    "keywords field": {
-        "transcription": {
-            "model": "gpt-4o-transcribe",
-            "language": "es",
-            "keywords": ["Supabase", "Portal", "rubber-duck"],
+    "current (gpt-4o-transcribe + semantic_vad low)": {
+        "input": {
+            "transcription": {"model": "gpt-4o-transcribe", "language": "es"},
+            "turn_detection": {"type": "semantic_vad", "eagerness": "low"},
         },
-        "turn_detection": {"type": "server_vad", "silence_duration_ms": 600},
+        "include": ["item.input_audio_transcription.logprobs"],
     },
-    "semantic_vad eagerness=high": {
-        "transcription": {"model": "gpt-4o-transcribe", "language": "es"},
-        "turn_detection": {"type": "semantic_vad", "eagerness": "high"},
-    },
-    "semantic_vad eagerness=low": {
-        "transcription": {"model": "gpt-4o-transcribe", "language": "es"},
-        "turn_detection": {"type": "semantic_vad", "eagerness": "low"},
-    },
-    "gpt-live-transcribe + server_vad": {
-        "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
-        "turn_detection": {"type": "server_vad", "silence_duration_ms": 600},
-    },
-    "gpt-live-transcribe + semantic_vad": {
-        "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
-        "turn_detection": {"type": "semantic_vad", "eagerness": "high"},
-    },
-    "gpt-live-transcribe delay=minimal": {
-        "transcription": {
-            "model": "gpt-live-transcribe",
-            "languages": ["es"],
-            "delay": "minimal",
-        },
-        "turn_detection": {"type": "semantic_vad", "eagerness": "high"},
-    },
-    "gpt-realtime-whisper + server_vad": {
-        "transcription": {"model": "gpt-realtime-whisper", "language": "es"},
-        "turn_detection": {"type": "server_vad", "silence_duration_ms": 600},
-    },
-    "gpt-realtime-whisper + semantic_vad": {
-        "transcription": {"model": "gpt-realtime-whisper", "language": "es"},
-        "turn_detection": {"type": "semantic_vad", "eagerness": "high"},
-    },
-    "gpt-realtime-whisper + keywords": {
-        "transcription": {
-            "model": "gpt-realtime-whisper",
-            "language": "es",
-            "keywords": ["Supabase", "Portal"],
-        },
-        "turn_detection": {"type": "semantic_vad", "eagerness": "high"},
-    },
-    "gpt-live-transcribe alone (no turn_detection)": {
-        "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
-    },
-    "gpt-live-transcribe + keywords": {
-        "transcription": {
-            "model": "gpt-live-transcribe",
-            "languages": ["es"],
-            "keywords": ["Supabase", "Portal"],
+    "live-transcribe, no turn_detection key": {
+        "input": {
+            "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
         },
     },
-    "diarize model": {
-        "transcription": {
-            "model": "gpt-4o-transcribe-diarize",
-            "language": "es",
+    "live-transcribe, turn_detection=null": {
+        "input": {
+            "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
+            "turn_detection": None,
         },
-        "turn_detection": {"type": "server_vad", "silence_duration_ms": 600},
+    },
+    "live-transcribe + delay=high": {
+        "input": {
+            "transcription": {
+                "model": "gpt-live-transcribe",
+                "languages": ["es"],
+                "delay": "high",
+            },
+            "turn_detection": None,
+        },
+    },
+    "live-transcribe + delay=xhigh": {
+        "input": {
+            "transcription": {
+                "model": "gpt-live-transcribe",
+                "languages": ["es"],
+                "delay": "xhigh",
+            },
+            "turn_detection": None,
+        },
+    },
+    "live-transcribe + keywords": {
+        "input": {
+            "transcription": {
+                "model": "gpt-live-transcribe",
+                "languages": ["es"],
+                "keywords": KEYWORDS,
+                "delay": "high",
+            },
+            "turn_detection": None,
+        },
+    },
+    "live-transcribe + server_vad": {
+        "input": {
+            "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
+            "turn_detection": {"type": "server_vad", "silence_duration_ms": 600},
+        },
+    },
+    "live-transcribe + semantic_vad low": {
+        "input": {
+            "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
+            "turn_detection": {"type": "semantic_vad", "eagerness": "low"},
+        },
+    },
+    "live-transcribe + logprobs include": {
+        "input": {
+            "transcription": {"model": "gpt-live-transcribe", "languages": ["es"]},
+            "turn_detection": None,
+        },
+        "include": ["item.input_audio_transcription.logprobs"],
+    },
+    "gpt-transcribe, turn_detection=null": {
+        "input": {
+            "transcription": {"model": "gpt-transcribe", "language": "es"},
+            "turn_detection": None,
+        },
+    },
+    "gpt-transcribe + semantic_vad low": {
+        "input": {
+            "transcription": {"model": "gpt-transcribe", "language": "es"},
+            "turn_detection": {"type": "semantic_vad", "eagerness": "low"},
+        },
     },
 }
 
 
-async def probe(client: httpx.AsyncClient, name: str, inp: dict) -> None:
+async def probe(client: httpx.AsyncClient, name: str, variant: dict) -> None:
+    session: dict = {
+        "type": "transcription",
+        "audio": {"input": variant["input"]},
+    }
+    if variant.get("include"):
+        session["include"] = variant["include"]
+
     r = await client.post(
         URL,
         headers={"Content-Type": "application/json"},
-        json={
-            "session": {
-                "type": "transcription",
-                "audio": {"input": inp},
-                "include": ["item.input_audio_transcription.logprobs"],
-            }
-        },
+        json={"session": session},
     )
     if r.status_code < 400:
         got = r.json()["session"]["audio"]["input"]
         print(f"{GREEN}✓{OFF} {BOLD}{name}{OFF}")
-        print(f"    {DIM}transcription: {json.dumps(got['transcription'])}{OFF}")
-        print(f"    {DIM}turn_detection: {json.dumps(got['turn_detection'])}{OFF}")
+        print(f"    {DIM}transcription: {json.dumps(got.get('transcription'))}{OFF}")
+        print(f"    {DIM}turn_detection: {json.dumps(got.get('turn_detection'))}{OFF}")
         return
 
     detail = r.json().get("error", {})

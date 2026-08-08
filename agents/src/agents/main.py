@@ -164,8 +164,10 @@ async def realtime_session() -> dict:
 
     transcription: dict = {
         "model": settings.openai_realtime_model,
-        "language": settings.openai_realtime_language,
+        "languages": [settings.openai_realtime_language],
     }
+    if settings.openai_realtime_keywords:
+        transcription["keywords"] = list(settings.openai_realtime_keywords)
     if settings.openai_realtime_prompt:
         transcription["prompt"] = settings.openai_realtime_prompt
 

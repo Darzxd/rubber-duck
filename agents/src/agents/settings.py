@@ -12,10 +12,21 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_organizer_model: str = "gpt-4.1-mini"
-    # gpt-live-transcribe streams deltas but rejects turn_detection, so it
-    # never closes a segment — we need server VAD to get final transcripts.
-    openai_realtime_model: str = "gpt-4o-transcribe"
+    # gpt-live-transcribe rejects turn_detection outright, so it never closes a
+    # segment on its own. gpt-transcribe takes semantic VAD and, unlike
+    # gpt-4o-transcribe, carries earlier turns as context into the next one.
+    openai_realtime_model: str = "gpt-transcribe"
     openai_realtime_language: str = "es"
+    # Literal hints, not preceding text — this is the safe way to feed
+    # vocabulary in. Keep it short: every term here biases what it hears.
+    openai_realtime_keywords: tuple[str, ...] = (
+        "Supabase",
+        "Portal",
+        "React Flow",
+        "Next.js",
+        "Vercel",
+        "LangGraph",
+    )
     # Accuracy over speed: a whole thought in one segment transcribes far
     # better than the same words cut into fragments, because each segment is
     # transcribed without the context of the others.
