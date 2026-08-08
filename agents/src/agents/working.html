@@ -9,7 +9,7 @@
     --bg: #0d0f12; --panel: #161b22; --line: #30363d;
     --fg: #e6e8eb; --dim: #8b949e;
     --green: #3fb950; --amber: #d29922; --red: #f85149; --blue: #58a6ff;
-    --violet: #a371f7;
+    --violet: #a371f7; --teal: #39c5bb;
   }
   body {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -50,6 +50,7 @@
   .row.noise::before { background: #30363d; }
   .row.organizer::before { background: var(--amber); }
   .row.handoff::before { background: var(--violet); }
+  .row.scribe::before { background: var(--teal); }
   .row.drew::before { background: var(--green); }
   .row.fresh { animation: pop 0.5s ease-out; }
   @keyframes pop { from { background: #1b222b; } to { background: transparent; } }
@@ -66,7 +67,14 @@
   .row.noise .what { color: #6e7681; }
   .row.organizer .what { color: var(--amber); }
   .row.handoff .what { color: var(--violet); }
+  .row.scribe .what { color: var(--teal); }
   .row.drew .what { color: var(--green); }
+  .row.scribe .says b { color: var(--teal); }
+  .row.handoff .says b { color: var(--violet); }
+  .tag {
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #6e7681; margin-left: 0.4rem;
+  }
 
   .body { font-size: 0.82rem; }
   .said { color: var(--fg); }
@@ -119,7 +127,9 @@
   const drawn = new Set();
 
   const params = new URLSearchParams(location.search);
-  const initial = params.get("session") || "*";
+  // Which session we are meant to be watching, which is not the same as what
+  // the select can offer yet.
+  let wanted = params.get("session") || "*";
 
   const clock = (ms) => {
     const d = ms ? new Date(ms * 1000) : new Date();
@@ -139,6 +149,20 @@
     const [first] = String(text).split(" ");
     if (!first || !OPENERS.has(first.toLowerCase())) return text;
     return first.toLowerCase() + text.slice(first.length);
+  }
+
+  // "6 ideas, 1 decisión" — what an agent was actually handed, by type.
+  const PLURAL = {
+    idea: ["idea", "ideas"], decision: ["decisión", "decisiones"],
+    pregunta: ["pregunta", "preguntas"], pendiente: ["pendiente", "pendientes"],
+  };
+  function tally(points) {
+    const by = new Map();
+    for (const pt of points) by.set(pt.kind, (by.get(pt.kind) || 0) + 1);
+    return [...by].map(([k, n]) => {
+      const [one, many] = PLURAL[k] || [k, k];
+      return `${n} ${n === 1 ? one : many}`;
+    }).join(", ") || "nada";
   }
 
   function row(kind, what, body, extra = "", at) {
@@ -174,19 +198,21 @@
       const r = await fetch("/sessions");
       const { sessions } = await r.json();
       const sel = $("session");
-      const current = sel.value;
       sel.innerHTML = '<option value="*">all sessions (live)</option>';
+      // A session asked for by URL may not have said anything yet. Without
+      // this the select falls back to nothing and watches an empty channel.
+      if (wanted !== "*" && !sessions.includes(wanted)) sessions.unshift(wanted);
       for (const s of sessions) {
         const o = document.createElement("option");
         o.value = s; o.textContent = s;
         sel.appendChild(o);
       }
-      sel.value = current;
+      sel.value = wanted;
     } catch {}
   }
 
   function connect() {
-    const id = $("session").value;
+    const id = wanted;
     if (es) es.close();
     es = new EventSource(`/events/${encodeURIComponent(id)}`);
     history.replaceState(null, "", id === "*" ? location.pathname : `?session=${id}`);
@@ -230,7 +256,9 @@
 
         const points = c.points || [];
         const said = points.map((pt) =>
-          `<div><b>${esc(pt.author || "alguien")}</b> dice que ${esc(saying(pt.text))}</div>`
+          `<div><b>${esc(pt.author || "alguien")}</b> dice que ${esc(saying(pt.text))}` +
+          (pt.kind && pt.kind !== "idea" ? `<span class="tag">${esc(pt.kind)}</span>` : "") +
+          `</div>`
         ).join("");
         const cost = c.took
           ? ` · modelo ${c.took.toFixed(1)}s sobre ${c.batch} ${c.batch === 1 ? "línea" : "líneas"}`
@@ -244,8 +272,31 @@
       }
 
       if (p.event === "orchestrator.dispatch") {
-        const to = (c.agents || []).map((a) => `<span class="to">${esc(a)}</span>`).join(", ");
-        row("handoff", "le pasa a", to || "nadie");
+        const routes = c.routes || {};
+        const names = c.agents || [];
+        const el = row("handoff", "le pasa a",
+          names.map((a) => `<span class="to">${esc(a)}</span>`).join(", ") || "nadie");
+        const detail = names.map((a) =>
+          `<div><b>${esc(a)}</b> ${tally(routes[a] || [])}</div>`
+        ).join("");
+        if (detail) el.insertAdjacentHTML("beforeend", `<div class="says">${detail}</div>`);
+        return;
+      }
+
+      if (p.event === "scribe.patch") {
+        const patch = c.patch || {};
+        const lists = [
+          ["decision", patch.decisions],
+          ["pendiente", patch.openItems],
+          ["pregunta", patch.openQuestions],
+        ].filter(([, items]) => (items || []).length);
+        if (!lists.length) return;
+        const el = row("scribe", "anota", lists.map(([kind, items]) =>
+          `${items.length} ${PLURAL[kind][items.length === 1 ? 0 : 1]}`).join(" · "));
+        el.insertAdjacentHTML("beforeend", `<div class="says">` + lists.map(
+          ([kind, items]) => items.map(
+            (t) => `<div><b>${PLURAL[kind][0]}</b> ${esc(t)}</div>`).join("")
+        ).join("") + `</div>`);
         return;
       }
 
@@ -269,7 +320,10 @@
     };
   }
 
-  $("session").addEventListener("change", connect);
+  $("session").addEventListener("change", () => {
+    wanted = $("session").value;
+    connect();
+  });
   $("reload").addEventListener("click", loadSessions);
   $("clear").addEventListener("click", () => {
     for (const k in counts) counts[k] = 0;
@@ -282,7 +336,7 @@
     $("feed").innerHTML = '<span class="empty">waiting for speech…</span>';
   });
 
-  loadSessions().then(() => { $("session").value = initial; connect(); });
+  loadSessions().then(connect);
   setInterval(loadSessions, 10000);
 </script>
 </body>

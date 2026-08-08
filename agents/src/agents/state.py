@@ -8,6 +8,11 @@ class TranscriptChunk(TypedDict):
     ts: float
 
 
+# What a line of the summary is, which is what decides who gets to act on it.
+Kind = Literal["idea", "decision", "pregunta", "pendiente"]
+KINDS: set[str] = {"idea", "decision", "pregunta", "pendiente"}
+
+
 class Point(TypedDict):
     """One line of what matters, as the Organizer currently understands it.
 
@@ -18,6 +23,7 @@ class Point(TypedDict):
     id: str
     text: str
     author: str
+    kind: Kind
 
 
 class Digest(TypedDict):
@@ -34,7 +40,13 @@ def point_id(text: str) -> str:
     return "p_" + hashlib.sha1(key.encode()).hexdigest()[:10]
 
 
+Agent = Literal["architect", "critic", "scribe"]
+
+
 class GraphState(TypedDict):
     session_id: str
     digest: Digest
-    dispatch: list[Literal["architect", "critic", "scribe"]]
+    dispatch: list[Agent]
+    # What the Orchestrator decided each agent should work on. An agent reads
+    # its own slice, never the whole summary.
+    routes: dict[str, list[Point]]

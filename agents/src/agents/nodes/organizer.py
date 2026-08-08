@@ -8,7 +8,7 @@ from openai import AsyncOpenAI
 from agents import organizer_store as store
 from agents.bus import emit
 from agents.settings import get_settings
-from agents.state import Digest, Point, TranscriptChunk, point_id
+from agents.state import KINDS, Digest, Point, TranscriptChunk, point_id
 
 logger = logging.getLogger("agents.organizer")
 
@@ -69,12 +69,20 @@ REGLA DURA — NO INVENTAR:
 QUÉ ES UN POINT:
 Una idea concreta, en una línea corta, tal como se dijo: una propuesta, una decisión, un problema, una parte del sistema, un paso. Máximo 10. Lo más importante primero.
 
+Cada point lleva un `kind`, que dice qué tipo de cosa es. Es lo único que clasificás, y es sobre la frase, no sobre la persona:
+- `decision`: el equipo ya lo resolvió. "vamos con Supabase", "queda descartado".
+- `pregunta`: quedó preguntado y sin responder. "¿dónde guardamos la transcripción?".
+- `pendiente`: falta hacerlo o falta definirlo. "falta registrar el dominio".
+- `idea`: todo lo demás — una propuesta, un problema, una parte del sistema, un paso.
+
+Ante la duda, `idea`.
+
 Formato de salida (JSON, sin prosa alrededor):
 {
   "summary": "una o dos oraciones de qué se está hablando, o null si sigue igual",
   "keep": [1, 2, 5],
   "add": [
-    {"text": "una idea concreta en pocas palabras", "author": "quién la dijo"}
+    {"text": "una idea concreta en pocas palabras", "author": "quién la dijo", "kind": "idea"}
   ]
 }
 
@@ -121,7 +129,15 @@ def _rebuild(data: dict, previous: list[Point]) -> list[Point] | None:
         if pid in seen:
             continue
         seen.add(pid)
-        out.append({"id": pid, "text": text, "author": _text(item.get("author"))})
+        kind = _text(item.get("kind")).lower()
+        out.append(
+            {
+                "id": pid,
+                "text": text,
+                "author": _text(item.get("author")),
+                "kind": kind if kind in KINDS else "idea",
+            }
+        )
 
     return out[:MAX_POINTS]
 
@@ -146,7 +162,7 @@ async def summarize(session_id: str, fresh: list[TranscriptChunk]) -> Digest | N
         "resumen_anterior": {
             "summary": previous["summary"],
             "points": [
-                {"n": i, "text": p["text"], "author": p["author"]}
+                {"n": i, "text": p["text"], "author": p["author"], "kind": p["kind"]}
                 for i, p in enumerate(previous["points"], start=1)
             ],
         },

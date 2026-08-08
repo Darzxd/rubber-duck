@@ -144,6 +144,23 @@ class TestPointCoercion:
 
         assert first["points"][0]["id"] == second["points"][0]["id"]
 
+    @pytest.mark.parametrize(
+        "kind, expected",
+        [("pregunta", "pregunta"), ("PENDIENTE", "pendiente"), ("otra cosa", "idea")],
+    )
+    async def test_the_kind_decides_who_acts_on_it(self, llm, kind, expected):
+        """An unreadable kind becomes an idea, so it still reaches the board."""
+        llm.raw = digest_of([{"text": "algo", "author": "N", "kind": kind}])
+        heard()
+
+        assert (await pass_over_it())["points"][0]["kind"] == expected
+
+    async def test_a_point_with_no_kind_is_an_idea(self, llm):
+        llm.raw = digest_of([{"text": "algo", "author": "N"}])
+        heard()
+
+        assert (await pass_over_it())["points"][0]["kind"] == "idea"
+
     async def test_duplicate_points_collapse(self, llm):
         llm.raw = digest_of(
             [

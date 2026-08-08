@@ -1,20 +1,27 @@
-from agents.portal import publish
-from agents.settings import get_settings
+from agents.bus import emit
 from agents.state import GraphState
+
+_LISTS = {
+    "decision": "decisions",
+    "pendiente": "openItems",
+    "pregunta": "openQuestions",
+}
 
 
 async def scribe(state: GraphState) -> dict:
-    # TODO: maintain live lists of decisions, open items, and open questions
-    # derived from the digest. Publish patches, not full snapshots.
-    digest = state["digest"]
-    if not digest["points"]:
-        return {}
+    # The Orchestrator already separated what belongs on each list, so this is
+    # a sort, not a judgement.
+    patch: dict[str, list[str]] = {
+        "decisions": [],
+        "openItems": [],
+        "openQuestions": [],
+    }
+    for point in state["routes"]["scribe"]:
+        patch[_LISTS[point["kind"]]].append(point["text"])
 
-    patch = {"decisions": [], "openItems": [], "openQuestions": []}
-
-    await publish(
-        get_settings().portal_channel_id,
+    await emit(
+        state["session_id"],
         "scribe.patch",
-        {"revision": digest["revision"], "patch": patch},
+        {"revision": state["digest"]["revision"], "patch": patch},
     )
     return {}

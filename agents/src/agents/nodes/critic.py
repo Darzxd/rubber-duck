@@ -1,20 +1,16 @@
-from agents.portal import publish
-from agents.settings import get_settings
+from agents.bus import emit
 from agents.state import GraphState
 
 
 async def critic(state: GraphState) -> dict:
-    # TODO: check the digest's points against the team's GitHub repo. Stick
-    # short notes with a file path. No evidence in the code, no note.
-    digest = state["digest"]
-    if not digest["points"]:
-        return {}
-
+    # TODO: check state["routes"]["critic"] — the proposals the Orchestrator
+    # sent here — against the team's GitHub repo. Stick short notes with a file
+    # path. No evidence in the code, no note.
     notes: list[dict] = []
 
-    await publish(
-        get_settings().portal_channel_id,
+    await emit(
+        state["session_id"],
         "critic.notes",
-        {"revision": digest["revision"], "notes": notes},
+        {"revision": state["digest"]["revision"], "notes": notes},
     )
     return {}

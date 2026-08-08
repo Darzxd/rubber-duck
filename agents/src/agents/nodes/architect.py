@@ -74,7 +74,9 @@ async def _draw(session_id: str, digest, nodes, edges) -> None:
 
 async def architect(state: GraphState) -> dict:
     digest = state["digest"]
-    points = digest["points"]
+    # Only what the Orchestrator sent here. Questions and pending items are
+    # somebody else's list, not a node on the board.
+    points = state["routes"]["architect"]
     session_id = state["session_id"]
 
     # Nodes are the Organizer's points verbatim, keeping their content-derived
