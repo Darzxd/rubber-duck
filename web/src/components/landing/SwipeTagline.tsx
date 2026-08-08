@@ -3,12 +3,21 @@
 import { useEffect, useState } from "react";
 import { useReducedMotion } from "./useReducedMotion";
 
+export type Tagline = {
+  text: string;
+  color: string;
+};
+
 type SwipeTaglineProps = {
-  phrases: string[];
+  phrases: Tagline[];
 };
 
 /** Matches the --cycle handed to the CSS animation. */
 const CYCLE_MS = 4200;
+
+/** Shared by the visible pill and its invisible height reservations. */
+const PILL =
+  "col-start-1 row-start-1 rounded-full border-2 px-5 py-2 text-sm font-semibold sm:text-base";
 
 export default function SwipeTagline({ phrases }: SwipeTaglineProps) {
   const [index, setIndex] = useState(0);
@@ -25,29 +34,38 @@ export default function SwipeTagline({ phrases }: SwipeTaglineProps) {
     return () => clearTimeout(timer);
   }, [index, prefersReducedMotion, phrases.length]);
 
+  const current = phrases[index];
+
   return (
     /**
-     * Same trick as the headline: every phrase sits in one grid cell, so the
-     * block is always as tall as the longest one and nothing below it moves.
+     * Every pill sits in one grid cell, so the block is always as wide and as
+     * tall as the largest phrase and nothing below it moves when they swap.
      */
-    <p className="grid w-full max-w-lg justify-items-center text-balance text-base leading-relaxed text-neutral-500 sm:text-lg">
+    <p className="grid justify-items-center text-balance">
       {phrases.map((reserved) => (
         <span
-          key={reserved}
+          key={reserved.text}
           aria-hidden="true"
-          className="invisible col-start-1 row-start-1"
+          className={`invisible ${PILL}`}
         >
-          {reserved}
+          {reserved.text}
         </span>
       ))}
 
       {/* Remounting on index change is what restarts the whoosh. */}
       <span
         key={index}
-        className="tagline-swipe col-start-1 row-start-1"
-        style={{ "--cycle": `${CYCLE_MS}ms` } as React.CSSProperties}
+        className={`tagline-swipe ${PILL}`}
+        style={
+          {
+            "--cycle": `${CYCLE_MS}ms`,
+            color: current.color,
+            borderColor: `${current.color}59`,
+            backgroundColor: `${current.color}14`,
+          } as React.CSSProperties
+        }
       >
-        {phrases[index]}
+        {current.text}
       </span>
     </p>
   );

@@ -51,7 +51,7 @@ export default function TypewriterHeadline({
      * take up space, so the box is always as tall as the longest phrase at the
      * current width — the headline can grow a line without shoving the page.
      */
-    <h1 className="grid w-full justify-items-center text-balance text-3xl font-extrabold leading-[1.15] tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl">
+    <h1 className="grid w-full justify-items-center text-balance text-2xl font-extrabold leading-[1.15] tracking-tight text-neutral-900 sm:text-4xl lg:text-5xl">
       {phrases.map((reserved) => (
         <span
           key={reserved}
