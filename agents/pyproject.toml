@@ -13,6 +13,7 @@ dependencies = [
     "langchain>=0.3",
     "langchain-openai>=1.4.2",
     "langgraph>=1.2.10",
+    "openai>=2.53.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.2",

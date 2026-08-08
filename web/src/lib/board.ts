@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 export type AgentNode = {
   id: string;
   label: string;
+  topic?: string;
   author?: string;
 };
 

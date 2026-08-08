@@ -21,12 +21,12 @@ export default function AgentNode({ node, index }: AgentNodeProps) {
       className="pointer-events-auto absolute z-10 max-w-[16rem] rounded-xl border-[3px] bg-white px-3 py-2 shadow-[3px_3px_0_rgba(0,0,0,0.12)]"
       style={{ left: `${x}%`, top: `${y}%`, borderColor: color }}
     >
-      {node.author && (
+      {(node.topic || node.author) && (
         <p
           className="text-[0.6rem] font-bold uppercase tracking-widest"
           style={{ color }}
         >
-          {node.author}
+          {node.topic || node.author}
         </p>
       )}
       <p className="text-sm leading-snug text-neutral-900">{node.label}</p>

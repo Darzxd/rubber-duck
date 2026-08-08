@@ -18,7 +18,7 @@ export type RealtimeController = {
 const AGENTS_URL =
   process.env.NEXT_PUBLIC_AGENTS_URL ?? "http://localhost:8000";
 
-const OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime";
+const OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/calls";
 
 type SessionResponse = {
   value?: string;
