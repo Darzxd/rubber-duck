@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
+import { useReducedMotion } from "./useReducedMotion";
 
 type TypewriterHeadlineProps = {
   phrases: string[];
@@ -10,23 +11,6 @@ const TYPE_MS = 55;
 const DELETE_MS = 24;
 const HOLD_MS = 1900;
 
-let motionQuery: MediaQueryList | null = null;
-
-function getMotionQuery() {
-  motionQuery ??= window.matchMedia("(prefers-reduced-motion: reduce)");
-  return motionQuery;
-}
-
-function subscribeToMotion(onChange: () => void) {
-  const query = getMotionQuery();
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-const readMotion = () => getMotionQuery().matches;
-/** The server can't know the preference, so it assumes motion is fine. */
-const readMotionOnServer = () => false;
-
 export default function TypewriterHeadline({
   phrases,
 }: TypewriterHeadlineProps) {
@@ -34,12 +18,7 @@ export default function TypewriterHeadline({
   const [length, setLength] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const prefersReducedMotion = useSyncExternalStore(
-    subscribeToMotion,
-    readMotion,
-    readMotionOnServer,
-  );
-
+  const prefersReducedMotion = useReducedMotion();
   const phrase = phrases[phraseIndex];
 
   useEffect(() => {
@@ -72,7 +51,7 @@ export default function TypewriterHeadline({
      * take up space, so the box is always as tall as the longest phrase at the
      * current width — the headline can grow a line without shoving the page.
      */
-    <h1 className="grid w-full justify-items-center text-balance text-3xl font-extrabold leading-[1.15] tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl">
+    <h1 className="grid w-full justify-items-center text-balance text-2xl font-extrabold leading-[1.15] tracking-tight text-neutral-900 sm:text-4xl lg:text-5xl">
       {phrases.map((reserved) => (
         <span
           key={reserved}

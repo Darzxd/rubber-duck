@@ -66,6 +66,36 @@ body {
   will-change: transform;
 }
 
+/* One cycle carries the whole life of a tagline: whoosh in from the right,
+   hold still while it can be read, whoosh out to the left. */
+@keyframes tagline-swipe {
+  0% {
+    opacity: 0;
+    transform: translate3d(2.25rem, 0, 0);
+    filter: blur(5px);
+  }
+  16% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+  84% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-2.25rem, 0, 0);
+    filter: blur(5px);
+  }
+}
+
+.tagline-swipe {
+  animation: tagline-swipe var(--cycle, 4200ms) ease-in-out both;
+  will-change: transform, opacity;
+}
+
 @keyframes caret-blink {
   0%,
   49% {
@@ -83,6 +113,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .board-travel,
+  .tagline-swipe,
   .caret-blink {
     animation: none;
   }

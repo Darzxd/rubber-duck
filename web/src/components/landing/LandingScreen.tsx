@@ -1,15 +1,33 @@
 import JoinScreen from "@/components/session/JoinScreen";
 import FloatingObjects from "./FloatingObjects";
+import SwipeTagline from "./SwipeTagline";
 import TypewriterHeadline from "./TypewriterHeadline";
 import Wordmark from "./Wordmark";
 
-/** Module scope keeps the reference stable across renders. */
+/**
+ * Module scope keeps the reference stable across renders. Lengths are kept
+ * close together on purpose: the headline reserves room for the longest one,
+ * so an outlier would leave a hole above the pill.
+ */
 const PHRASES = [
-  "Mandate a innovar con tu equipo",
-  "Inspirá y visualizá con tus socios",
-  "Convertí la charla en decisiones",
-  "Dibujá lo que el equipo está pensando",
-  "Que la pizarra siga el ritmo de la reunión",
+  "Anímate a innovar con tu equipo",
+  "Inspira y visualiza con tu gente",
+  "Convierte la charla en decisiones",
+  "Dibuja lo que el equipo piensa",
+  "Sigue el ritmo de la reunión",
+];
+
+/**
+ * Shorter and more concrete than the headline: between them these five still
+ * explain what the product actually does, so nothing is left unsaid. Colours
+ * are dark enough to stay readable on white.
+ */
+const TAGLINES = [
+  { text: "Tus reglas, tu equipo en línea", color: "#3b2fe0" },
+  { text: "Hablas, y la pizarra se dibuja sola", color: "#b45309" },
+  { text: "Todo lo que se decide, queda escrito", color: "#047857" },
+  { text: "Entras con tu nombre, sin instalar nada", color: "#be123c" },
+  { text: "La reunión termina con el mapa hecho", color: "#0e7490" },
 ];
 
 /** Present enough to read as paper, still lighter than every object on top. */
@@ -44,13 +62,10 @@ export default function LandingScreen({ onJoin }: LandingScreenProps = {}) {
         <Wordmark />
       </header>
 
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-2xl flex-col items-center justify-center gap-6 px-5 py-24 text-center">
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-2xl flex-col items-center justify-center gap-5 px-5 py-20 text-center">
         <TypewriterHeadline phrases={PHRASES} />
 
-        <p className="max-w-lg text-balance text-base leading-relaxed text-neutral-500 sm:text-lg">
-          La pizarra se llena sola mientras ustedes hablan. Entrás con tu nombre
-          y listo.
-        </p>
+        <SwipeTagline phrases={TAGLINES} />
 
         <JoinScreen onJoin={onJoin} />
       </div>
