@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import time
 
 from agents import organizer_store as store
 from agents.nodes.organizer import is_noise, summarize
-from agents.state import TranscriptChunk
+from agents.state import Digest, TranscriptChunk
 
 logger = logging.getLogger("agents.organizer.loop")
 
@@ -17,6 +18,7 @@ IDLE_SEC = 5.0
 
 _tasks: dict[str, asyncio.Task] = {}
 _wakeups: dict[str, asyncio.Event] = {}
+_draws: set[asyncio.Task] = set()
 
 
 def ensure_running(session_id: str, dispatch) -> None:
@@ -53,22 +55,44 @@ async def _run(session_id: str, dispatch) -> None:
                 continue
 
             await asyncio.sleep(DEBOUNCE_SEC)
-            if not store.take_pending(session_id):
+            taken = store.take_pending(session_id)
+            if not taken:
                 continue
 
-            digest = await summarize(session_id)
+            spoken_at = taken[0]["ts"]
+            digest = await summarize(session_id, taken)
             if digest is None:
                 continue
 
-            try:
-                await dispatch(session_id, digest)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                # One bad drawing must not take the session's ears down with
-                # it. Keep listening.
-                logger.exception("dispatch failed session=%s", session_id)
+            # The nodes go up as soon as the dispatch starts, so this is what
+            # the budget is measured against.
+            logger.info(
+                "rev=%s on the board %.1fs after it was said session=%s",
+                digest["revision"],
+                time.time() - spoken_at,
+                session_id,
+            )
+            # Drawing is somebody else's problem. Waiting for it would put the
+            # Architect's model call inside the Organizer's cycle, and the two
+            # together do not fit in the budget.
+            _start_draw(session_id, digest, dispatch)
     except asyncio.CancelledError:
         raise
     except Exception:
         logger.exception("organizer loop crashed session=%s", session_id)
+
+
+def _start_draw(session_id: str, digest: Digest, dispatch) -> None:
+    async def draw() -> None:
+        try:
+            await dispatch(session_id, digest)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # One bad drawing must not take the session's ears down with it.
+            logger.exception("dispatch failed session=%s", session_id)
+
+    # Held only so the loop does not collect a drawing still in flight.
+    task = asyncio.create_task(draw())
+    _draws.add(task)
+    task.add_done_callback(_draws.discard)

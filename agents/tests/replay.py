@@ -75,9 +75,9 @@ async def main() -> None:
         if gap < loop.DEBOUNCE_SEC:
             continue
 
-        store.take_pending(SESSION)
+        fresh = store.take_pending(SESSION)
         calls += 1
-        digest = await summarize(SESSION)
+        digest = await summarize(SESSION, fresh)
         if digest is None:
             print(f"{DIM}  ── pasada {calls}: sin cambios ──{OFF}\n")
             continue
@@ -87,9 +87,9 @@ async def main() -> None:
         print()
 
     if store.get(SESSION).pending:
-        store.take_pending(SESSION)
+        fresh = store.take_pending(SESSION)
         calls += 1
-        if await summarize(SESSION) is not None:
+        if await summarize(SESSION, fresh) is not None:
             redraws += 1
 
     print(f"\n{BOLD}final{OFF}  ·  {calls} llamadas al modelo  ·  {redraws} redibujos")

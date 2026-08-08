@@ -42,13 +42,22 @@ def llm(monkeypatch):
     return box
 
 
-def digest_of(points, summary="algo"):
-    return json.dumps({"summary": summary, "points": points})
+def digest_of(add, summary="algo", keep=None):
+    """What the model answers: numbers for what stays, objects for what is new."""
+    return json.dumps({"summary": summary, "keep": keep or [], "add": add})
+
+
+_fresh: list = []
 
 
 def heard(text="algo con sustancia", author="Ignacio"):
+    """Puts one line into the session, the way the loop would."""
     store.add_chunk("s", {"author": author, "text": text, "ts": 0.0})
-    store.take_pending("s")
+    _fresh[:] = store.take_pending("s")
+
+
+async def pass_over_it():
+    return await organizer.summarize("s", _fresh)
 
 
 class TestIsNoise:
@@ -83,11 +92,11 @@ class TestMalformedModelOutput:
             "null",
             "[1, 2, 3]",
             '"just a string"',
-            '{"points": "nope"}',
-            '{"points": [null, 7, "x"]}',
-            '{"points": {}}',
-            '{"points": [{"author": "Ignacio"}]}',
-            '{"summary": null, "points": null}',
+            '{"keep": "nope", "add": "nope"}',
+            '{"add": [null, 7, "x"], "keep": [99, "x", null]}',
+            '{"keep": {}, "add": {}}',
+            '{"add": [{"author": "Ignacio"}]}',
+            '{"summary": null, "keep": null, "add": null}',
             '{"unexpected": "shape"}',
         ],
     )
@@ -95,14 +104,14 @@ class TestMalformedModelOutput:
         llm.raw = raw
         heard()
 
-        assert await organizer.summarize("s") is None
+        assert await pass_over_it() is None
         assert store.get("s").digest["revision"] == 0
 
     async def test_api_failure_keeps_previous_digest(self, llm):
         llm.raw = RuntimeError("openai down")
         heard()
 
-        assert await organizer.summarize("s") is None
+        assert await pass_over_it() is None
         assert store.get("s").digest == {
             "summary": "",
             "points": [],
@@ -115,14 +124,14 @@ class TestPointCoercion:
         llm.raw = digest_of([{"text": "Guardar todo en Supabase", "author": "N"}])
         heard()
 
-        d = await organizer.summarize("s")
+        d = await pass_over_it()
         assert d["points"][0]["id"] == point_id("Guardar todo en Supabase")
 
     async def test_same_text_keeps_its_id_across_passes(self, llm):
         """This is what stops the canvas from rebuilding a node a human moved."""
         heard()
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
-        first = await organizer.summarize("s")
+        first = await pass_over_it()
 
         llm.raw = digest_of(
             [
@@ -131,7 +140,7 @@ class TestPointCoercion:
             ],
             "dos",
         )
-        second = await organizer.summarize("s")
+        second = await pass_over_it()
 
         assert first["points"][0]["id"] == second["points"][0]["id"]
 
@@ -144,7 +153,7 @@ class TestPointCoercion:
         )
         heard()
 
-        assert len((await organizer.summarize("s"))["points"]) == 1
+        assert len((await pass_over_it())["points"]) == 1
 
     async def test_caps_the_list(self, llm):
         llm.raw = digest_of(
@@ -152,31 +161,66 @@ class TestPointCoercion:
         )
         heard()
 
-        points = (await organizer.summarize("s"))["points"]
+        points = (await pass_over_it())["points"]
         assert len(points) == organizer.MAX_POINTS
 
     async def test_empty_points_is_a_valid_answer(self, llm):
         llm.raw = digest_of([], "todavia no dijeron nada")
         heard()
 
-        d = await organizer.summarize("s")
+        d = await pass_over_it()
         assert d["points"] == []
         assert d["revision"] == 1
+
+
+class TestKeepByNumber:
+    """The model names what it already wrote by number instead of retyping it.
+    Retyping ten points every couple of seconds is what blew the 3s budget."""
+
+    async def test_kept_number_reuses_the_point(self, llm):
+        heard()
+        llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
+        first = await pass_over_it()
+
+        llm.raw = digest_of([{"text": "y dagre", "author": "I"}], "dos", keep=[1])
+        second = await pass_over_it()
+
+        assert second["points"][0] == first["points"][0]
+        assert second["points"][1]["text"] == "y dagre"
+
+    async def test_unnamed_points_fall_off_the_board(self, llm):
+        heard()
+        llm.raw = digest_of(
+            [{"text": "Usar Portal", "author": "N"}, {"text": "y dagre", "author": "I"}],
+            "uno",
+        )
+        await pass_over_it()
+
+        llm.raw = digest_of([], "dos", keep=[2])
+        assert [p["text"] for p in (await pass_over_it())["points"]] == ["y dagre"]
+
+    async def test_a_number_that_does_not_exist_is_ignored(self, llm):
+        heard()
+        llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
+        await pass_over_it()
+
+        llm.raw = digest_of([], "dos", keep=[1, 9, 0, -3])
+        assert len((await pass_over_it())["points"]) == 1
 
 
 class TestChangeDetection:
     async def test_identical_answer_does_not_redraw(self, llm):
         heard()
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "igual")
-        assert await organizer.summarize("s") is not None
+        assert await pass_over_it() is not None
         # Same summary, same points: nothing for the board to do.
-        assert await organizer.summarize("s") is None
+        assert await pass_over_it() is None
         assert store.get("s").digest["revision"] == 1
 
     async def test_new_point_bumps_the_revision(self, llm):
         heard()
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
-        await organizer.summarize("s")
+        await pass_over_it()
 
         llm.raw = digest_of(
             [
@@ -185,19 +229,31 @@ class TestChangeDetection:
             ],
             "uno",
         )
-        assert (await organizer.summarize("s"))["revision"] == 2
+        assert (await pass_over_it())["revision"] == 2
 
 
 class TestContext:
-    async def test_model_sees_the_talk_and_its_own_last_summary(self, llm):
+    """Only the new speech goes up each pass. Re-sending the whole conversation
+    made every call slower than the last, which is how the 3s budget was lost."""
+
+    async def test_old_talk_stays_out_of_the_new_pass(self, llm):
         heard(author="Nico", text="propongo Supabase")
         llm.raw = digest_of([{"text": "Supabase", "author": "Nico"}], "uno")
-        await organizer.summarize("s")
+        await pass_over_it()
 
         heard(author="Ignacio", text="y el layout con dagre")
-        await organizer.summarize("s")
+        await pass_over_it()
 
         sent = json.loads(llm.last["messages"][1]["content"])
-        assert "Nico: propongo Supabase" in sent["conversacion"]
-        assert "Ignacio: y el layout con dagre" in sent["conversacion"]
+        assert sent["nuevo"] == ["Ignacio: y el layout con dagre"]
+        assert "Nico: propongo Supabase" in sent["dicho_antes"]
+        # The summary is what carries the memory forward, not the transcript.
         assert sent["resumen_anterior"]["summary"] == "uno"
+
+    async def test_run_up_is_capped(self, llm):
+        for i in range(30):
+            heard(text=f"linea numero {i}")
+            await pass_over_it()
+
+        sent = json.loads(llm.last["messages"][1]["content"])
+        assert len(sent["dicho_antes"]) == organizer.TAIL_CHUNKS

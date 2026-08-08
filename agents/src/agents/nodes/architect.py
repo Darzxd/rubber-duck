@@ -58,9 +58,24 @@ def _edges(v, valid: set[str]) -> list[dict]:
     return out
 
 
+async def _draw(session_id: str, digest, nodes, edges) -> None:
+    await emit(
+        session_id,
+        "architect.draw",
+        {
+            "revision": digest["revision"],
+            # These nodes are the complete state of the board, not an addition.
+            "replace": True,
+            "nodes": nodes,
+            "edges": edges,
+        },
+    )
+
+
 async def architect(state: GraphState) -> dict:
     digest = state["digest"]
     points = digest["points"]
+    session_id = state["session_id"]
 
     # Nodes are the Organizer's points verbatim, keeping their content-derived
     # ids. So a redraw reuses the same node instead of replacing it, and the
@@ -69,6 +84,11 @@ async def architect(state: GraphState) -> dict:
         {"id": p["id"], "label": p["text"], "author": p["author"]}
         for p in points
     ]
+
+    # The nodes cost nothing to work out, so they go up now. Waiting for the
+    # arrows would put a model call between speech and the first thing anybody
+    # sees, and that is the whole budget.
+    await _draw(session_id, digest, nodes, [])
 
     edges: list[dict] = []
     settings = get_settings()
@@ -103,15 +123,6 @@ async def architect(state: GraphState) -> dict:
             # A diagram with no arrows still beats no diagram.
             logger.exception("architect edges failed; drawing nodes only")
 
-    await emit(
-        state["session_id"],
-        "architect.draw",
-        {
-            "revision": digest["revision"],
-            # These nodes are the complete state of the board, not an addition.
-            "replace": True,
-            "nodes": nodes,
-            "edges": edges,
-        },
-    )
+    if edges:
+        await _draw(session_id, digest, nodes, edges)
     return {}
