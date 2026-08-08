@@ -5,7 +5,7 @@ import AgentStatusCard from "./AgentStatusCard";
 import InsightCard from "./InsightCard";
 import LiveSummary from "./LiveSummary";
 import TranscriptLine from "./TranscriptLine";
-import { FilterIcon, SearchIcon } from "./icons";
+import { ChevronRight, FilterIcon, SearchIcon } from "./icons";
 import {
   SAMPLE_AGENTS,
   SAMPLE_INSIGHT,
@@ -24,6 +24,7 @@ type SidePanelProps = {
   transcript?: Line[];
   insight?: Insight | null;
   summary?: SummaryCount[];
+  onHide?: () => void;
 };
 
 const TABS: { id: TabId; label: string }[] = [
@@ -40,6 +41,7 @@ export default function SidePanel({
   transcript = SAMPLE_TRANSCRIPT,
   insight = SAMPLE_INSIGHT,
   summary = SAMPLE_SUMMARY,
+  onHide,
 }: SidePanelProps) {
   const [tab, setTab] = useState<TabId>("agents");
 
@@ -69,6 +71,16 @@ export default function SidePanel({
             ) : null}
           </button>
         ))}
+
+        <button
+          type="button"
+          onClick={onHide}
+          title="Ocultar panel"
+          aria-label="Ocultar panel"
+          className="my-auto ml-1 grid size-7 shrink-0 place-items-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-white"
+        >
+          <ChevronRight className="size-4" />
+        </button>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
