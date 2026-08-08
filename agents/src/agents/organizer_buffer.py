@@ -27,12 +27,17 @@ def replace(session_id: str, chunks: list[TranscriptChunk]) -> None:
 
 def should_organize(
     session_id: str,
-    min_chunks: int = 2,
-    timeout_sec: float = 4.0,
+    min_chunks: int = 4,
+    timeout_sec: float = 10.0,
 ) -> bool:
+    """Speech arrives as short fragments, so organizing on every one burns a
+    model call to be told there is nothing worth keeping. Wait for enough
+    context, or for the room to go quiet."""
     b = _buffers[session_id]
-    if not b["chunks"]:
-        return False
-    if len(b["chunks"]) >= min_chunks:
+    count = len(b["chunks"])
+    if count >= min_chunks:
         return True
+    # A lone fragment never carries a thread, so never spend a call on one.
+    if count < 2:
+        return False
     return time.time() - b["last_organized"] >= timeout_sec
