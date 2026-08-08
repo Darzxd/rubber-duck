@@ -1,13 +1,19 @@
+import uuid
+
 from agents.state import GraphState
 
 
 async def organizer(state: GraphState) -> dict:
-    # TODO: group buffered chunks into topic threads, decide when a thread has
-    # settled, filter out anything that does not deserve the canvas. Only this
-    # node dispatches — controls the pace of the whole graph.
+    # Slice 1: dispatch every incoming chunk to the architect. Real batching
+    # into topic threads (with filtering and settling) comes later.
     chunk = state["incoming"]
+    thread = {
+        "id": uuid.uuid4().hex[:8],
+        "chunks": [chunk],
+        "settled": True,
+    }
     return {
         "buffer": [chunk],
-        "settled_thread": None,
-        "dispatch": [],
+        "settled_thread": thread,
+        "dispatch": ["architect"],
     }

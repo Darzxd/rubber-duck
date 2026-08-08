@@ -1,7 +1,12 @@
-from fastapi import FastAPI
+import asyncio
+import json
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from agents.bus import subscribe, unsubscribe
 from agents.graph import graph
 from agents.state import TranscriptChunk
 
@@ -43,3 +48,24 @@ async def ingest(req: IngestRequest) -> dict:
         }
     )
     return {"accepted": True}
+
+
+@app.get("/events/{session_id}")
+async def events(session_id: str, request: Request) -> StreamingResponse:
+    q = subscribe(session_id)
+
+    async def gen():
+        try:
+            yield ": connected\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    payload = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            unsubscribe(session_id, q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
