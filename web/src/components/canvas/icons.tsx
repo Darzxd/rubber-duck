@@ -357,3 +357,26 @@ export const PanelRightIcon = ({ className }: IconProps) => (
     className={className ?? "size-4"}
   />
 );
+
+export const TableIcon = ({ className }: IconProps) => (
+  <Line
+    d="M4.2 6.6a1.4 1.4 0 0 1 1.4-1.4h12.8a1.4 1.4 0 0 1 1.4 1.4v10.8a1.4 1.4 0 0 1-1.4 1.4H5.6a1.4 1.4 0 0 1-1.4-1.4zM4.2 9.6h15.6M9.6 9.6v9.2M4.2 14.2h15.6"
+    className={className}
+  />
+);
+
+export const SelectAllIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className={className ?? BASE} fill="none">
+    <rect
+      x="4.2"
+      y="4.2"
+      width="15.6"
+      height="15.6"
+      rx="2.4"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeDasharray="3.4 2.6"
+    />
+    <rect x="8.4" y="8.4" width="7.2" height="7.2" rx="1.2" fill="currentColor" />
+  </svg>
+);

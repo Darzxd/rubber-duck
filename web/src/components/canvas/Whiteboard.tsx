@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import ActionBar from "./ActionBar";
-import BoardLayer from "./BoardLayer";
+import BoardLayer, { type CellRef } from "./BoardLayer";
 import CanvasSurface, { type CanvasApi } from "./CanvasSurface";
 import ColorBar from "./ColorBar";
 import PresenceCursor from "./PresenceCursor";
@@ -14,6 +14,9 @@ import ZoomBar from "./ZoomBar";
 import { SAMPLE_AUTHORS, type Author } from "./authors";
 import {
   NOTE_PRESETS,
+  TABLE_DEFAULTS,
+  cellAt,
+  emptyCells,
   hitTest,
   newId,
   type BoardElement,
@@ -30,9 +33,11 @@ type WhiteboardProps = {
   children?: ReactNode;
 };
 
-/** Tools that put ink on the board, and so bring the colour panel along. */
+/** Tools that put ink on the board, and so bring the colour bar along. */
 const DRAWING_TOOLS: ToolId[] = ["pen", "shapes", "circle", "arrow", "text"];
 const NOTE_TOOLS: ToolId[] = ["idea", "decision", "task", "doubt"];
+/** Tools that drop a fixed-size thing where you click, instead of dragging. */
+const STAMP_TOOLS: ToolId[] = [...NOTE_TOOLS, "text", "table"];
 
 const ZOOM_STEP = 10;
 const MIN_ZOOM = 30;
@@ -67,23 +72,31 @@ export default function Whiteboard({
   const [isDark, setIsDark] = useState(false);
   const [color, setColor] = useState("#111111");
   const [strokeSize, setStrokeSize] = useState(4);
-  const opacity = 100;
   const [zoom, setZoom] = useState(100);
   const [resetSignal, setResetSignal] = useState(0);
   const [showSidePanel, setShowSidePanel] = useState(true);
   const [draft, setDraft] = useState<BoardElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<CellRef | null>(null);
 
   const board = useBoardElements();
   const canvasApi = useRef<CanvasApi | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const origin = useRef<Point>({ x: 0, y: 0 });
-  const dragging = useRef<{ id: string; last: Point } | null>(null);
+  const dragging = useRef<{ ids: string[]; last: Point } | null>(null);
+  /** Cell to open on release: focusing it now lets pointerup steal the focus. */
+  const pendingCell = useRef<CellRef | null>(null);
 
+  const opacity = 100;
   const style = { color, width: strokeSize, opacity };
 
-  function handleSelectTool(tool: ToolId) {
+  function stopEditing() {
     setEditingId(null);
+    setEditingCell(null);
+  }
+
+  function handleSelectTool(tool: ToolId) {
+    stopEditing();
     if (tool === "image") {
       fileInput.current?.click();
       return;
@@ -91,85 +104,71 @@ export default function Whiteboard({
     setActiveTool(tool);
   }
 
-  /** The bar edits the selection when there is one, otherwise the next stroke. */
-  function handleColorChange(next: string) {
-    setColor(next);
-    if (board.selectedId) {
-      board.checkpoint();
-      board.patch(board.selectedId, { color: next });
-    }
-  }
-
-  function handleStrokeSizeChange(next: number) {
-    setStrokeSize(next);
-    if (board.selectedId) {
-      board.checkpoint();
-      board.patch(board.selectedId, { width: next });
-    }
-  }
-
   function handleResetView() {
     setZoom(100);
     setResetSignal((signal) => signal + 1);
   }
 
-  function handleDrawStart(point: Point) {
-    setEditingId(null);
+  /** The bar edits the selection when there is one, otherwise the next stroke. */
+  function handleColorChange(next: string) {
+    setColor(next);
+    if (board.selectedIds.length > 0) {
+      board.checkpoint();
+      board.patch(board.selectedIds, { color: next });
+    }
+  }
+
+  function handleStrokeSizeChange(next: number) {
+    setStrokeSize(next);
+    if (board.selectedIds.length > 0) {
+      board.checkpoint();
+      board.patch(board.selectedIds, { width: next });
+    }
+  }
+
+  function handleDrawStart(point: Point, event: React.PointerEvent) {
+    stopEditing();
     origin.current = point;
 
-    if (activeTool === "select") {
-      // Topmost first: the last drawn element wins an overlap.
-      const hit = [...board.elements].reverse().find((el) => hitTest(el, point));
-      board.setSelectedId(hit?.id ?? null);
-      if (hit) {
-        board.checkpoint();
-        dragging.current = { id: hit.id, last: point };
+    if (activeTool !== "select") return;
+
+    // Topmost first: the last drawn element wins an overlap.
+    const hit = [...board.elements].reverse().find((el) => hitTest(el, point));
+    if (!hit) {
+      board.setSelectedIds([]);
+      return;
+    }
+
+    // A second click on an already-selected table goes into the cell.
+    if (hit.kind === "table" && board.selectedIds.includes(hit.id)) {
+      const cell = cellAt(hit, point);
+      if (cell) {
+        pendingCell.current = { id: hit.id, ...cell };
+        return;
       }
-      return;
     }
 
-    // Text and notes are created on release: focusing an editor mid-click lets
-    // the pointerup steal the focus straight back and close it again.
-    if (NOTE_TOOLS.includes(activeTool) || activeTool === "text") return;
+    const already = board.selectedIds.includes(hit.id);
+    const ids = event.shiftKey
+      ? already
+        ? board.selectedIds.filter((id) => id !== hit.id)
+        : [...board.selectedIds, hit.id]
+      : already
+        ? board.selectedIds
+        : [hit.id];
 
-    if (activeTool === "pen") {
-      setDraft({ kind: "path", id: newId(), points: [point], ...style });
-      return;
-    }
-
-    if (activeTool === "shapes" || activeTool === "circle") {
-      setDraft({
-        kind: activeTool === "shapes" ? "rect" : "ellipse",
-        id: newId(),
-        x: point.x,
-        y: point.y,
-        w: 0,
-        h: 0,
-        ...style,
-      });
-      return;
-    }
-
-    if (activeTool === "arrow") {
-      setDraft({
-        kind: "arrow",
-        id: newId(),
-        x1: point.x,
-        y1: point.y,
-        x2: point.x,
-        y2: point.y,
-        ...style,
-      });
+    board.setSelectedIds(ids);
+    if (ids.length > 0) {
+      board.checkpoint();
+      dragging.current = { ids, last: point };
     }
   }
 
   function handleDrawMove(point: Point) {
     const drag = dragging.current;
     if (drag) {
-      const dx = point.x - drag.last.x;
-      const dy = point.y - drag.last.y;
+      board.moveBy(drag.ids, point.x - drag.last.x, point.y - drag.last.y);
       drag.last = point;
-      board.moveBy(drag.id, dx, dy);
       return;
     }
 
@@ -193,40 +192,47 @@ export default function Whiteboard({
   }
 
   function handleDrawEnd() {
+    if (pendingCell.current) {
+      setEditingCell(pendingCell.current);
+      pendingCell.current = null;
+      return;
+    }
+
     if (dragging.current) {
       dragging.current = null;
       return;
     }
 
-    if (NOTE_TOOLS.includes(activeTool)) {
-      const preset = NOTE_PRESETS[activeTool];
-      const note: BoardElement = {
-        kind: "note",
-        id: newId(),
-        x: origin.current.x,
-        y: origin.current.y,
-        text: "",
-        tag: preset.tag,
-        tone: preset.tone,
-        ...style,
-      };
-      board.add(note);
-      setEditingId(note.id);
-      setActiveTool("select");
-      return;
-    }
+    // Stamps are created on release: focusing an editor mid-click lets the
+    // pointerup steal the focus straight back and close it again.
+    if (STAMP_TOOLS.includes(activeTool)) {
+      const at = origin.current;
 
-    if (activeTool === "text") {
-      const text: BoardElement = {
-        kind: "text",
-        id: newId(),
-        x: origin.current.x,
-        y: origin.current.y,
-        text: "",
-        ...style,
-      };
-      board.add(text);
-      setEditingId(text.id);
+      if (activeTool === "table") {
+        const table: BoardElement = {
+          kind: "table",
+          id: newId(),
+          x: at.x,
+          y: at.y,
+          cells: emptyCells(TABLE_DEFAULTS.rows, TABLE_DEFAULTS.cols),
+          cellW: TABLE_DEFAULTS.cellW,
+          cellH: TABLE_DEFAULTS.cellH,
+          ...style,
+        };
+        board.add(table);
+        board.setSelectedIds([table.id]);
+        setActiveTool("select");
+        return;
+      }
+
+      const shared = { id: newId(), x: at.x, y: at.y, text: "", ...style };
+      const element: BoardElement =
+        activeTool === "text"
+          ? { kind: "text", ...shared }
+          : { kind: "note", ...shared, ...NOTE_PRESETS[activeTool] };
+
+      board.add(element);
+      setEditingId(element.id);
       setActiveTool("select");
       return;
     }
@@ -249,9 +255,7 @@ export default function Whiteboard({
       return;
     }
     if (draft.kind === "arrow") {
-      const far =
-        Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) > 6;
-      if (!far) {
+      if (Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) <= 6) {
         setDraft(null);
         return;
       }
@@ -259,6 +263,69 @@ export default function Whiteboard({
 
     board.add(draft);
     setDraft(null);
+  }
+
+  function handleDrawStartWrapper(point: Point, event: React.PointerEvent) {
+    handleDrawStart(point, event);
+    if (activeTool === "pen") {
+      setDraft({ kind: "path", id: newId(), points: [point], ...style });
+      return;
+    }
+    if (activeTool === "shapes" || activeTool === "circle") {
+      setDraft({
+        kind: activeTool === "shapes" ? "rect" : "ellipse",
+        id: newId(),
+        x: point.x,
+        y: point.y,
+        w: 0,
+        h: 0,
+        ...style,
+      });
+      return;
+    }
+    if (activeTool === "arrow") {
+      setDraft({
+        kind: "arrow",
+        id: newId(),
+        x1: point.x,
+        y1: point.y,
+        x2: point.x,
+        y2: point.y,
+        ...style,
+      });
+    }
+  }
+
+  function handleChangeCell(ref: CellRef, value: string) {
+    const table = board.elements.find((el) => el.id === ref.id);
+    if (table?.kind !== "table") return;
+    board.replace(ref.id, {
+      ...table,
+      cells: table.cells.map((row, r) =>
+        r === ref.row ? row.map((cell, c) => (c === ref.col ? value : cell)) : row,
+      ),
+    });
+  }
+
+  function handleAddRow(id: string) {
+    const table = board.elements.find((el) => el.id === id);
+    if (table?.kind !== "table") return;
+    board.checkpoint();
+    const cols = table.cells[0]?.length ?? 0;
+    board.replace(id, {
+      ...table,
+      cells: [...table.cells, Array.from({ length: cols }, () => "")],
+    });
+  }
+
+  function handleAddColumn(id: string) {
+    const table = board.elements.find((el) => el.id === id);
+    if (table?.kind !== "table") return;
+    board.checkpoint();
+    board.replace(id, {
+      ...table,
+      cells: table.cells.map((row) => [...row, ""]),
+    });
   }
 
   function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -288,32 +355,41 @@ export default function Whiteboard({
     reader.readAsDataURL(file);
   }
 
-  // Delete and Escape act on the selection, the way every editor behaves.
+  // Keyboard shortcuts act on the selection, the way every editor behaves.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (isTypingTarget(event.target)) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        board.selectAll();
+        return;
+      }
       if (event.key === "Escape") {
-        board.setSelectedId(null);
+        board.setSelectedIds([]);
         setEditingId(null);
+        setEditingCell(null);
         return;
       }
       if (event.key !== "Delete" && event.key !== "Backspace") return;
-      if (!board.selectedId) return;
+      if (board.selectedIds.length === 0) return;
       event.preventDefault();
-      board.remove(board.selectedId);
+      board.remove(board.selectedIds);
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [board]);
 
-  const selected = board.elements.find((el) => el.id === board.selectedId);
+  const selected = board.elements.find((el) =>
+    board.selectedIds.includes(el.id),
+  );
   // With something selected the bar shows that element's colour, so the marker
   // always sits on the chip the user is actually looking at.
   const selectedColor = selected?.color ?? color;
   const selectedWidth = selected?.width ?? strokeSize;
   const showColorBar =
-    Boolean(board.selectedId) ||
+    board.selectedIds.length > 0 ||
     DRAWING_TOOLS.includes(activeTool) ||
     NOTE_TOOLS.includes(activeTool);
 
@@ -324,6 +400,7 @@ export default function Whiteboard({
         onSelectTool={handleSelectTool}
         onUndo={board.undo}
         onRedo={board.redo}
+        onSelectAll={board.selectAll}
       />
 
       {/* Only offered where the panel can actually show: it is desktop-only. */}
@@ -345,7 +422,7 @@ export default function Whiteboard({
           onColorChange={handleColorChange}
           strokeSize={selectedWidth}
           onStrokeSizeChange={handleStrokeSizeChange}
-          editingSelection={Boolean(board.selectedId)}
+          editingSelection={board.selectedIds.length > 0}
         />
       ) : null}
 
@@ -384,7 +461,7 @@ export default function Whiteboard({
             forcePan={activeTool === "hand"}
             canDraw={activeTool !== "select" && activeTool !== "hand"}
             resetSignal={resetSignal}
-            onDrawStart={handleDrawStart}
+            onDrawStart={handleDrawStartWrapper}
             onDrawMove={handleDrawMove}
             onDrawEnd={handleDrawEnd}
             overlay={overlay}
@@ -394,10 +471,14 @@ export default function Whiteboard({
             <BoardLayer
               elements={board.elements}
               draft={draft}
-              selectedId={board.selectedId}
+              selectedIds={board.selectedIds}
               editingId={editingId}
-              onChangeText={(id, text) => board.patch(id, { text })}
-              onFinishEditing={() => setEditingId(null)}
+              editingCell={editingCell}
+              onChangeText={(id, text) => board.patch([id], { text })}
+              onChangeCell={handleChangeCell}
+              onFinishEditing={stopEditing}
+              onAddRow={handleAddRow}
+              onAddColumn={handleAddColumn}
             />
 
             {authors.map((author) => (

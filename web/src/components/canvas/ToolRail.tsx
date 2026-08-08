@@ -12,7 +12,9 @@ import {
   RedoIcon,
   SelectIcon,
   ShapesIcon,
+  SelectAllIcon,
   SparkleIcon,
+  TableIcon,
   TaskTrendIcon,
   TextIcon,
   UndoIcon,
@@ -26,6 +28,7 @@ export type ToolId =
   | "circle"
   | "arrow"
   | "image"
+  | "table"
   | "hand"
   | "idea"
   | "decision"
@@ -40,6 +43,7 @@ type ToolRailProps = {
   onAiAction?: (action: AiActionId) => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  onSelectAll?: () => void;
 };
 
 const BUILD: { id: ToolId; label: string; Icon: typeof SelectIcon }[] = [
@@ -49,6 +53,7 @@ const BUILD: { id: ToolId; label: string; Icon: typeof SelectIcon }[] = [
   { id: "shapes", label: "Formas", Icon: ShapesIcon },
   { id: "circle", label: "Círculo", Icon: CircleToolIcon },
   { id: "arrow", label: "Flecha", Icon: ArrowToolIcon },
+  { id: "table", label: "Tabla", Icon: TableIcon },
   { id: "image", label: "Imagen", Icon: ImageIcon },
 ];
 
@@ -83,6 +88,7 @@ export default function ToolRail({
   onAiAction,
   onUndo,
   onRedo,
+  onSelectAll,
 }: ToolRailProps) {
   return (
     <div className="no-scrollbar pointer-events-auto absolute left-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-[6.5rem] flex-col gap-2 overflow-y-auto">
@@ -155,6 +161,19 @@ export default function ToolRail({
             {label}
           </button>
         ))}
+      </div>
+
+      <div className={CARD}>
+        <button
+          type="button"
+          onClick={onSelectAll}
+          aria-label="Seleccionar todo"
+          title="Seleccionar todo (Ctrl+A)"
+          className={`${ROW} text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800`}
+        >
+          <SelectAllIcon className="size-4 shrink-0 text-neutral-400" />
+          Todo
+        </button>
       </div>
 
       <div className={`${CARD} flex justify-center gap-1`}>

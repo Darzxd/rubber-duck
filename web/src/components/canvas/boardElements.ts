@@ -30,6 +30,15 @@ export type BoardElement =
       w: number;
       h: number;
       src: string;
+    })
+  | (Base & {
+      kind: "table";
+      x: number;
+      y: number;
+      /** Row-major cell text; its shape is the size of the table. */
+      cells: string[][];
+      cellW: number;
+      cellH: number;
     });
 
 export type BoundingBox = { x: number; y: number; w: number; h: number };
@@ -69,7 +78,34 @@ export function boundsOf(element: BoardElement): BoundingBox {
       return { x: element.x, y: element.y, ...NOTE_SIZE };
     case "text":
       return { x: element.x, y: element.y, ...TEXT_SIZE };
+    case "table":
+      return {
+        x: element.x,
+        y: element.y,
+        w: (element.cells[0]?.length ?? 0) * element.cellW,
+        h: element.cells.length * element.cellH,
+      };
   }
+}
+
+export const TABLE_DEFAULTS = { cols: 3, rows: 3, cellW: 116, cellH: 34 };
+
+export function emptyCells(rows: number, cols: number) {
+  return Array.from({ length: rows }, () => Array.from({ length: cols }, () => ""));
+}
+
+/** Which cell of a table a board point lands on, or null if it misses. */
+export function cellAt(
+  element: Extract<BoardElement, { kind: "table" }>,
+  point: Point,
+) {
+  const col = Math.floor((point.x - element.x) / element.cellW);
+  const row = Math.floor((point.y - element.y) / element.cellH);
+  const cols = element.cells[0]?.length ?? 0;
+  if (row < 0 || col < 0 || row >= element.cells.length || col >= cols) {
+    return null;
+  }
+  return { row, col };
 }
 
 /** Generous by a few px so thin strokes are still easy to grab. */

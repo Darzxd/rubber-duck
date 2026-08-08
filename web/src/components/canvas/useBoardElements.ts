@@ -8,7 +8,7 @@ const HISTORY_LIMIT = 50;
 
 export function useBoardElements() {
   const [elements, setElements] = useState<BoardElement[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   /**
    * A mirror of the state. Every operation reads and writes it directly, so no
@@ -40,21 +40,32 @@ export function useBoardElements() {
 
   /** Live edits: no checkpoint, the gesture that started it already made one. */
   const patch = useCallback(
-    (id: string, next: Partial<BoardElement>) => {
+    (ids: string[], next: Partial<BoardElement>) => {
       commit(
         current.current.map((element) =>
-          element.id === id ? ({ ...element, ...next } as BoardElement) : element,
+          ids.includes(element.id)
+            ? ({ ...element, ...next } as BoardElement)
+            : element,
         ),
       );
     },
     [commit],
   );
 
+  const replace = useCallback(
+    (id: string, next: BoardElement) => {
+      commit(
+        current.current.map((element) => (element.id === id ? next : element)),
+      );
+    },
+    [commit],
+  );
+
   const moveBy = useCallback(
-    (id: string, dx: number, dy: number) => {
+    (ids: string[], dx: number, dy: number) => {
       commit(
         current.current.map((element) =>
-          element.id === id ? moveElement(element, dx, dy) : element,
+          ids.includes(element.id) ? moveElement(element, dx, dy) : element,
         ),
       );
     },
@@ -62,20 +73,25 @@ export function useBoardElements() {
   );
 
   const remove = useCallback(
-    (id: string) => {
+    (ids: string[]) => {
+      if (ids.length === 0) return;
       checkpoint();
-      commit(current.current.filter((element) => element.id !== id));
-      setSelectedId((selected) => (selected === id ? null : selected));
+      commit(current.current.filter((element) => !ids.includes(element.id)));
+      setSelectedIds([]);
     },
     [checkpoint, commit],
   );
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(current.current.map((element) => element.id));
+  }, []);
 
   const undo = useCallback(() => {
     const previous = past.current.pop();
     if (previous === undefined) return;
     future.current = [...future.current, current.current];
     commit(previous);
-    setSelectedId(null);
+    setSelectedIds([]);
   }, [commit]);
 
   const redo = useCallback(() => {
@@ -83,16 +99,18 @@ export function useBoardElements() {
     if (next === undefined) return;
     past.current = [...past.current, current.current];
     commit(next);
-    setSelectedId(null);
+    setSelectedIds([]);
   }, [commit]);
 
   return {
     elements,
-    selectedId,
-    setSelectedId,
+    selectedIds,
+    setSelectedIds,
+    selectAll,
     checkpoint,
     add,
     patch,
+    replace,
     moveBy,
     remove,
     undo,
