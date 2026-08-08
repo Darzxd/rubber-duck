@@ -104,6 +104,28 @@ async def ingest(req: IngestRequest) -> dict:
     return {"accepted": True, "queued": kept}
 
 
+@app.get("/threads/{session_id}")
+async def threads(session_id: str) -> dict:
+    s = organizer_store.get(session_id)
+    return {
+        "pending": len(s.pending),
+        "threads": [
+            {
+                "id": t["id"],
+                "topic": t["topic"],
+                "summary": t["summary"],
+                "status": t["status"],
+                "dispatched": t["dispatched"],
+                "participants": t["participants"],
+                "intents": t["intents"],
+                "open_questions": t.get("open_questions") or [],
+                "chunks": len(t["chunks"]),
+            }
+            for t in s.threads.values()
+        ],
+    }
+
+
 @app.post("/unsure")
 async def unsure(req: UnsureRequest) -> dict:
     """The browser heard something it does not trust. It stops there — this
