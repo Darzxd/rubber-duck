@@ -518,10 +518,11 @@ export default function Whiteboard({
     radius: selected?.radius ?? radius,
     opacity: selected?.opacity ?? opacity,
   };
+  // Also for the stamps, so a colour can be chosen before dropping one.
   const showStyleBar =
     board.selectedIds.length > 0 ||
     DRAWING_TOOLS.includes(activeTool) ||
-    NOTE_TOOLS.includes(activeTool);
+    STAMP_TOOLS.includes(activeTool);
 
   const overlay = (
     <>
