@@ -93,7 +93,7 @@ export async function startRealtimeTranscription(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  const sdpRes = await fetch(`${OPENAI_REALTIME_URL}?intent=transcription`, {
+  const sdpRes = await fetch(OPENAI_REALTIME_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${clientSecret}`,
