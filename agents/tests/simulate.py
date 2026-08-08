@@ -34,7 +34,6 @@ async def main() -> None:
     ap.add_argument("--fast", type=float, default=1.0)
     args = ap.parse_args()
 
-    started = time.time()
     print(f"{BOLD}simulando {len(SCRIPT)} lineas en {args.session}{OFF}")
     print(f"{DIM}mira {args.url}/working?session={args.session}{OFF}\n")
 
@@ -50,7 +49,10 @@ async def main() -> None:
                     "session_id": args.session,
                     "author": author,
                     "text": text,
-                    "ts": started + offset,
+                    # When this line actually left, not where it sits in the
+                    # script. Under --fast the two drift apart, and anything
+                    # measuring speech-to-board would be timing the drift.
+                    "ts": time.time(),
                 },
             )
             queued = r.json().get("queued")

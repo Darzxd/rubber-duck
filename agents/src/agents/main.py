@@ -62,7 +62,7 @@ async def ingest(req: IngestRequest) -> dict:
     await emit(
         req.session_id,
         "ingest.received",
-        {"author": req.author, "text": req.text},
+        {"author": req.author, "text": req.text, "ts": req.ts},
     )
 
     # Ingest only queues. The Organizer loop listens on its own clock, so a

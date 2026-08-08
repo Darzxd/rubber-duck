@@ -9,10 +9,11 @@
     --bg: #0d0f12; --panel: #161b22; --line: #30363d;
     --fg: #e6e8eb; --dim: #8b949e;
     --green: #3fb950; --amber: #d29922; --red: #f85149; --blue: #58a6ff;
+    --violet: #a371f7;
   }
   body {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: var(--bg); color: var(--fg); padding: 1.5rem 2rem 3rem;
+    background: var(--bg); color: var(--fg); padding: 1.5rem 2rem 4rem;
     min-height: 100vh;
   }
   header.top { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
@@ -26,70 +27,61 @@
   .status { font-size: 0.75rem; color: var(--dim); }
   .status.on { color: var(--green); }
 
-  h2 {
-    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.15em;
-    color: var(--dim); margin-bottom: 0.6rem;
+  .bar { display: flex; gap: 2rem; margin: 1.4rem 0 1.6rem; flex-wrap: wrap; }
+  .stat .big { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+  .stat .sub {
+    font-size: 0.63rem; color: var(--dim); margin-top: 0.15rem;
+    text-transform: uppercase; letter-spacing: 0.12em;
   }
+  .stat.slow .big { color: var(--red); }
 
-  .pipeline { display: flex; align-items: stretch; gap: 0.4rem; margin: 1.5rem 0; flex-wrap: wrap; }
-  .stage {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 0.85rem 1rem; flex: 1; min-width: 9rem;
-    transition: border-color 0.15s, box-shadow 0.15s;
+  /* One column, newest on top. Every row is one moment in the pipeline, and
+     the eye should be able to follow speech turning into a drawing. */
+  .feed { border-left: 1px solid var(--line); padding-left: 1.1rem; }
+  .row {
+    position: relative; padding: 0.5rem 0 0.55rem;
+    border-bottom: 1px solid #1b2027; line-height: 1.5;
   }
-  .stage.flash { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
-  .stage .big { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
-  .stage .sub { font-size: 0.68rem; color: var(--dim); margin-top: 0.2rem; }
-  .arrow { align-self: center; color: var(--line); }
-  .agent { display: flex; justify-content: space-between; font-size: 0.78rem; padding: 0.1rem 0; }
-  .agent .n { color: var(--dim); }
-  .agent.dim { opacity: 0.35; }
-
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.75rem; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; }
-  .scroll { max-height: 19rem; overflow-y: auto; }
-
-  .chip {
-    display: inline-block; margin: 0 0.4rem 0.4rem 0; padding: 0.3rem 0.7rem;
-    border-radius: 999px; font-size: 0.75rem; border: 1px solid var(--line);
+  .row::before {
+    content: ""; position: absolute; left: -1.42rem; top: 0.95rem;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--line);
   }
-  .chip.settled { border-color: var(--green); color: var(--green); }
-  .chip.ongoing { border-color: var(--amber); color: var(--amber); }
+  .row.heard::before { background: var(--blue); }
+  .row.noise::before { background: #30363d; }
+  .row.organizer::before { background: var(--amber); }
+  .row.handoff::before { background: var(--violet); }
+  .row.drew::before { background: var(--green); }
+  .row.fresh { animation: pop 0.5s ease-out; }
+  @keyframes pop { from { background: #1b222b; } to { background: transparent; } }
 
-  .thread {
-    display: inline-block; vertical-align: top; width: 22rem; margin: 0 0.5rem 0.5rem 0;
-    background: var(--panel); border: 1px solid var(--line); border-left-width: 3px;
-    border-radius: 8px; padding: 0.6rem 0.8rem;
+  .when {
+    font-size: 0.66rem; color: #6e7681; letter-spacing: 0.04em;
+    display: inline-block; width: 7.2rem;
   }
-  .thread.settled { border-left-color: var(--green); }
-  .thread.ongoing { border-left-color: var(--amber); }
-  .thread .thead { font-size: 0.8rem; font-weight: 700; display: flex; justify-content: space-between; gap: 0.5rem; }
-  .thread.settled .thead { color: var(--green); }
-  .thread.ongoing .thead { color: var(--amber); }
-  .thread .who2 { font-weight: 400; font-size: 0.65rem; color: var(--dim); }
-  .thread .want { font-size: 0.72rem; color: var(--fg); margin-top: 0.35rem; line-height: 1.4; }
-  .thread .want b { color: var(--blue); }
-  .log li.settled b { color: var(--green); }
+  .what {
+    font-size: 0.63rem; text-transform: uppercase; letter-spacing: 0.12em;
+    display: inline-block; width: 6.5rem;
+  }
+  .row.heard .what { color: var(--blue); }
+  .row.noise .what { color: #6e7681; }
+  .row.organizer .what { color: var(--amber); }
+  .row.handoff .what { color: var(--violet); }
+  .row.drew .what { color: var(--green); }
 
-  .line { font-size: 0.78rem; padding: 0.35rem 0; border-bottom: 1px solid #21262d; line-height: 1.45; }
-  .line:last-child { border-bottom: 0; }
-  .line .who { color: var(--blue); font-weight: 700; }
-  .line.dropped { color: #6e7681; text-decoration: line-through; }
-  .line .tag { font-size: 0.65rem; color: var(--red); text-decoration: none; display: inline-block; margin-left: 0.4rem; }
+  .body { font-size: 0.82rem; }
+  .said { color: var(--fg); }
+  .row.noise .body { color: #6e7681; text-decoration: line-through; }
+  .who { color: var(--blue); font-weight: 700; }
 
-  .note { border-left: 3px solid var(--green); padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; background: #0d1117; border-radius: 0 6px 6px 0; }
-  .note .topic { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--green); }
-  .note .label { font-size: 0.8rem; margin-top: 0.2rem; line-height: 1.45; }
-  .note .meta { font-size: 0.65rem; color: var(--dim); margin-top: 0.3rem; }
-
-  .log { margin-top: 1.5rem; }
-  .log li { list-style: none; font-size: 0.72rem; padding: 0.25rem 0; border-bottom: 1px solid #161b22; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .log li b { color: var(--fg); }
-  .log li.noise b { color: var(--red); }
-  .log li.draw b { color: var(--green); }
-  .log li.organize b { color: var(--amber); }
-  .log li.ingest b { color: var(--blue); }
+  /* The organizer's own words, one line per point, the way it would say them
+     out loud before handing the pile to somebody else. */
+  .says { margin: 0.35rem 0 0 13.7rem; }
+  .says div { font-size: 0.78rem; padding: 0.12rem 0; color: var(--fg); }
+  .says b { color: var(--amber); font-weight: 700; }
+  .gist { margin: 0.15rem 0 0 13.7rem; font-size: 0.72rem; color: var(--dim); }
+  .lag { font-size: 0.66rem; color: var(--dim); margin-left: 0.5rem; }
+  .lag.slow { color: var(--red); }
+  .to { color: var(--violet); font-weight: 700; }
   .empty { color: #30363d; font-size: 0.75rem; }
 </style>
 </head>
@@ -105,86 +97,76 @@
     <span class="status" id="status">connecting…</span>
   </header>
 
-  <div class="pipeline">
-    <div class="stage" id="st-ingest">
-      <h2>Ingest</h2><div class="big" id="c-ingest">0</div>
-      <div class="sub">chunks received</div>
-    </div>
-    <div class="arrow">→</div>
-    <div class="stage" id="st-filter">
-      <h2>Noise filter</h2><div class="big" id="c-noise">0</div>
-      <div class="sub">dropped (jaja / fillers)</div>
-    </div>
-    <div class="arrow">→</div>
-    <div class="stage" id="st-buffer">
-      <h2>Buffer</h2><div class="big" id="c-buffer">0</div>
-      <div class="sub">chunks waiting</div>
-    </div>
-    <div class="arrow">→</div>
-    <div class="stage" id="st-organizer">
-      <h2>Organizer · LLM</h2><div class="big" id="c-organized">0</div>
-      <div class="sub">summary revisions</div>
-    </div>
-    <div class="arrow">→</div>
-    <div class="stage" id="st-agents">
-      <h2>Dispatch</h2>
-      <div class="agent"><span class="n">architect</span><span id="c-architect">0</span></div>
-      <div class="agent dim"><span class="n">critic</span><span>stub</span></div>
-      <div class="agent dim"><span class="n">scribe</span><span>stub</span></div>
-    </div>
+  <div class="bar">
+    <div class="stat"><div class="big" id="c-heard">0</div><div class="sub">heard</div></div>
+    <div class="stat"><div class="big" id="c-noise">0</div><div class="sub">ignored</div></div>
+    <div class="stat"><div class="big" id="c-buffer">0</div><div class="sub">waiting</div></div>
+    <div class="stat"><div class="big" id="c-rev">0</div><div class="sub">revisions</div></div>
+    <div class="stat"><div class="big" id="c-nodes">0</div><div class="sub">on the board</div></div>
+    <div class="stat" id="st-lag"><div class="big" id="c-lag">—</div><div class="sub">speech → board</div></div>
   </div>
 
-  <div>
-    <h2>Running summary · what the organizer is keeping</h2>
-    <div id="threads"><span class="empty">nothing yet</span></div>
-  </div>
-
-  <div class="grid">
-    <div>
-      <h2>Transcript in · what the mic sent</h2>
-      <div class="card scroll" id="transcript"><span class="empty">waiting for speech…</span></div>
-    </div>
-    <div>
-      <h2>Board out · what the architect drew</h2>
-      <div class="card scroll" id="board"><span class="empty">no nodes yet</span></div>
-    </div>
-  </div>
-
-  <div class="log">
-    <h2>Raw event log</h2>
-    <div class="card scroll"><ul id="log"></ul></div>
-  </div>
+  <div class="feed" id="feed"><span class="empty">waiting for speech…</span></div>
 
 <script>
   const $ = (id) => document.getElementById(id);
   let es = null;
-  const counts = { ingest: 0, noise: 0, organized: 0, architect: 0 };
+  const counts = { heard: 0, noise: 0, rev: 0, nodes: 0 };
+  // The digest carries when its oldest line was spoken. The draw that follows
+  // only carries a revision, so we look the moment back up by revision.
+  const spokenAt = new Map();
+  // Revisions that already put something on the board once.
+  const drawn = new Set();
 
   const params = new URLSearchParams(location.search);
   const initial = params.get("session") || "*";
 
-  function flash(id) {
-    const el = $(id);
-    el.classList.add("flash");
-    setTimeout(() => el.classList.remove("flash"), 400);
+  const clock = (ms) => {
+    const d = ms ? new Date(ms * 1000) : new Date();
+    return d.toLocaleTimeString("es-AR", { hour12: false }) +
+      "." + String(d.getMilliseconds()).padStart(3, "0");
+  };
+
+  const esc = (s) => String(s ?? "").replace(/[<>&]/g,
+    (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]);
+
+  // "Ignacio dice que El equipo…" reads wrong. Only these openers get lowered,
+  // so a point that starts on a name keeps it: "…dice que Supabase alcanza".
+  const OPENERS = new Set(["el", "la", "los", "las", "un", "una", "se", "hay",
+    "cada", "no", "es", "está", "estan", "están", "para", "con", "por", "ya",
+    "lo", "todo", "todos", "esto", "eso", "falta", "queda", "van", "va"]);
+  function saying(text) {
+    const [first] = String(text).split(" ");
+    if (!first || !OPENERS.has(first.toLowerCase())) return text;
+    return first.toLowerCase() + text.slice(first.length);
   }
 
-  function put(containerId, node) {
-    const c = $(containerId);
-    const empty = c.querySelector(".empty");
-    if (empty) empty.remove();
-    c.prepend(node);
-    while (c.children.length > 60) c.lastChild.remove();
+  function row(kind, what, body, extra = "", at) {
+    const feed = $("feed");
+    const blank = feed.querySelector(".empty");
+    if (blank) blank.remove();
+    const el = document.createElement("div");
+    el.className = `row ${kind} fresh`;
+    el.innerHTML =
+      `<span class="when">${clock(at)}</span>` +
+      `<span class="what">${what}</span>` +
+      `<span class="body">${body}</span>${extra}`;
+    feed.prepend(el);
+    setTimeout(() => el.classList.remove("fresh"), 500);
+    while (feed.children.length > 200) feed.lastChild.remove();
+    return el;
   }
 
-  function log(kind, text, session) {
-    const li = document.createElement("li");
-    li.className = kind;
-    const t = new Date().toLocaleTimeString();
-    const s = session ? ` <span style="color:#484f58">[${session}]</span>` : "";
-    li.innerHTML = `<b>${kind}</b> · ${t}${s} · ${text}`;
-    $("log").prepend(li);
-    while ($("log").children.length > 300) $("log").lastChild.remove();
+  function showLag(seconds, first) {
+    const slow = seconds > 3;
+    // The headline number is the budget: how long until something appears.
+    // The arrows land in a later draw of the same revision and would only
+    // make the number look worse than what anybody actually waited for.
+    if (first) {
+      $("c-lag").textContent = seconds.toFixed(1) + "s";
+      $("st-lag").classList.toggle("slow", slow);
+    }
+    return `<span class="lag${slow ? " slow" : ""}">${seconds.toFixed(1)}s desde que se dijo</span>`;
   }
 
   async function loadSessions() {
@@ -218,18 +200,14 @@
       let p;
       try { p = JSON.parse(msg.data); } catch { return; }
       const c = p.content || {};
-      const sid = p.sessionId;
 
       if (p.event === "ingest.received") {
-        counts.ingest++;
-        $("c-ingest").textContent = counts.ingest;
-        flash("st-ingest");
-        const el = document.createElement("div");
-        el.className = "line";
-        el.dataset.text = c.text;
-        el.innerHTML = `<span class="who">${c.author}</span> ${c.text}`;
-        put("transcript", el);
-        log("ingest", `${c.author}: ${c.text}`, sid);
+        counts.heard++;
+        $("c-heard").textContent = counts.heard;
+        // The moment of capture is the mic's own clock, not ours.
+        row("heard", "escucha",
+          `<span class="who">${esc(c.author)}</span> <span class="said">${esc(c.text)}</span>`,
+          "", c.ts);
         return;
       }
 
@@ -237,60 +215,48 @@
         if (c.stage === "noise_dropped") {
           counts.noise++;
           $("c-noise").textContent = counts.noise;
-          flash("st-filter");
-          const match = [...$("transcript").children].find(
-            (n) => n.dataset && n.dataset.text === c.text);
-          if (match) {
-            match.classList.add("dropped");
-            match.insertAdjacentHTML("beforeend", '<span class="tag">noise</span>');
-          }
-          log("noise", `dropped "${c.text}"`, sid);
+          row("noise", "ignora", esc(c.text));
         } else if (c.stage === "queued") {
           $("c-buffer").textContent = c.pending;
-          flash("st-buffer");
         }
         return;
       }
 
       if (p.event === "organizer.digest") {
-        counts.organized++;
-        $("c-organized").textContent = counts.organized;
+        counts.rev++;
+        $("c-rev").textContent = counts.rev;
         $("c-buffer").textContent = 0;
-        flash("st-organizer");
+        if (c.spoken_at) spokenAt.set(c.revision, c.spoken_at);
+
         const points = c.points || [];
-        $("threads").innerHTML =
-          `<div class="thread settled">` +
-          `<div class="thead">● ${c.summary || "(sin resumen)"}` +
-          `<span class="who2">rev ${c.revision}</span></div>` +
-          points.map((pt) => `<div class="want"><b>${pt.author}</b> ${pt.text}</div>`).join("") +
-          `</div>`;
-        log("digest", `rev ${c.revision} · ${points.length} puntos · ${c.summary}`, sid);
+        const said = points.map((pt) =>
+          `<div><b>${esc(pt.author || "alguien")}</b> dice que ${esc(saying(pt.text))}</div>`
+        ).join("");
+        const el = row("organizer", "organiza", `rev ${c.revision} · ${points.length} ideas`);
+        el.insertAdjacentHTML("beforeend",
+          (c.summary ? `<div class="gist">${esc(c.summary)}</div>` : "") +
+          `<div class="says">${said || "<div>todavía nada que valga la pena</div>"}</div>`);
         return;
       }
 
       if (p.event === "orchestrator.dispatch") {
-        flash("st-agents");
-        log("dispatch", `rev ${c.revision} → ${(c.agents || []).join(", ")}`, sid);
+        const to = (c.agents || []).map((a) => `<span class="to">${esc(a)}</span>`).join(", ");
+        row("handoff", "le pasa a", to || "nadie");
         return;
       }
 
       if (p.event === "architect.draw") {
-        const nodes = c.nodes || [];
-        const edges = c.edges || [];
-        counts.architect = nodes.length;
-        $("c-architect").textContent = counts.architect;
-        flash("st-agents");
-        // The Architect always sends the whole board, so we redraw it whole.
-        $("board").innerHTML = nodes.length
-          ? nodes.map((n) =>
-              `<div class="note"><div class="label">${n.label}</div>` +
-              `<div class="meta">${n.author || "?"} · rev ${c.revision}</div></div>`).join("")
-          : '<span class="empty">no nodes yet</span>';
-        log("draw", `${nodes.length} nodos, ${edges.length} flechas (rev ${c.revision})`, sid);
+        const nodes = (c.nodes || []).length;
+        const edges = (c.edges || []).length;
+        counts.nodes = nodes;
+        $("c-nodes").textContent = nodes;
+        const at = spokenAt.get(c.revision);
+        const first = !drawn.has(c.revision);
+        drawn.add(c.revision);
+        const lag = at ? showLag(Date.now() / 1000 - at, first) : "";
+        row("drew", "dibuja", `${nodes} nodos, ${edges} flechas`, lag);
         return;
       }
-
-      log("event", p.event, sid);
     };
 
     es.onerror = () => {
@@ -303,12 +269,13 @@
   $("reload").addEventListener("click", loadSessions);
   $("clear").addEventListener("click", () => {
     for (const k in counts) counts[k] = 0;
-    ["c-ingest","c-noise","c-buffer","c-organized","c-architect"]
+    spokenAt.clear();
+    drawn.clear();
+    ["c-heard", "c-noise", "c-buffer", "c-rev", "c-nodes"]
       .forEach((id) => ($(id).textContent = "0"));
-    $("log").innerHTML = "";
-    $("transcript").innerHTML = '<span class="empty">waiting for speech…</span>';
-    $("board").innerHTML = '<span class="empty">no nodes yet</span>';
-    $("threads").innerHTML = '<span class="empty">nothing yet</span>';
+    $("c-lag").textContent = "—";
+    $("st-lag").classList.remove("slow");
+    $("feed").innerHTML = '<span class="empty">waiting for speech…</span>';
   });
 
   loadSessions().then(() => { $("session").value = initial; connect(); });

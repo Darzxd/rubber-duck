@@ -201,6 +201,9 @@ async def summarize(session_id: str, fresh: list[TranscriptChunk]) -> Digest | N
             "revision": digest["revision"],
             "summary": digest["summary"],
             "points": digest["points"],
+            # When the oldest line in this pass was spoken, so a watcher can
+            # tell how long the board took to catch up with the room.
+            "spoken_at": fresh[0]["ts"] if fresh else None,
         },
     )
     return digest
