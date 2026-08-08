@@ -292,14 +292,6 @@ export const ListIcon = ({ className }: IconProps) => (
   />
 );
 
-export const SearchIcon = ({ className }: IconProps) => (
-  <Line d="M15.6 15.6 20 20M17.4 10.7a6.7 6.7 0 1 1-13.4 0 6.7 6.7 0 0 1 13.4 0Z" className={className ?? "size-4"} />
-);
-
-export const FilterIcon = ({ className }: IconProps) => (
-  <Line d="M4.5 6h15l-5.8 6.9v5.4l-3.4 1.7v-7.1z" className={className ?? "size-4"} />
-);
-
 export const ArrowRightIcon = ({ className }: IconProps) => (
   <Line d="M4.5 12h15M14 6.5l5.5 5.5L14 17.5" className={className ?? "size-4"} />
 );
@@ -345,17 +337,6 @@ export const RobotIcon = ({ className }: IconProps) => (
     <circle cx="14.6" cy="12.4" r="1.4" fill="currentColor" />
     <path d="M9.6 16h4.8" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" />
   </svg>
-);
-
-export const ChevronRight = ({ className }: IconProps) => (
-  <Line d="M9.5 6 15 12l-5.5 6" className={className ?? "size-4"} />
-);
-
-export const PanelRightIcon = ({ className }: IconProps) => (
-  <Line
-    d="M4.5 6.6a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v10.8a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2zM14.2 4.6v14.8"
-    className={className ?? "size-4"}
-  />
 );
 
 export const TableIcon = ({ className }: IconProps) => (
