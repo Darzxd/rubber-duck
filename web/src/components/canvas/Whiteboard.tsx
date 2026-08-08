@@ -5,7 +5,6 @@ import ActionBar from "./ActionBar";
 import BoardLayer, { type CellRef } from "./BoardLayer";
 import CanvasSurface, { type CanvasApi } from "./CanvasSurface";
 import ColorBar from "./ColorBar";
-import PresenceCursor from "./PresenceCursor";
 import SidePanel from "./SidePanel";
 import ThemeSwitch from "./ThemeSwitch";
 import ToolRail, { type ToolId } from "./ToolRail";
@@ -563,10 +562,6 @@ export default function Whiteboard({
               onChangeOption={handleChangeOption}
               onAddOption={handleAddOption}
             />
-
-            {authors.map((author) => (
-              <PresenceCursor key={author.id} author={author} />
-            ))}
           </CanvasSurface>
 
           {showSidePanel ? (
