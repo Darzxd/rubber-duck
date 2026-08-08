@@ -81,7 +81,7 @@ export default function ToolRail({
   onAiAction,
 }: ToolRailProps) {
   return (
-    <div className="pointer-events-auto absolute left-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-[6.5rem] flex-col gap-2 overflow-y-auto">
+    <div className="no-scrollbar pointer-events-auto absolute left-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-[6.5rem] flex-col gap-2 overflow-y-auto">
       <div className={CARD}>
         <p className={SECTION_LABEL}>Crear</p>
         <button
