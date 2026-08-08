@@ -14,7 +14,7 @@ type StickyNoteProps = {
   children: ReactNode;
 };
 
-const TONES: Record<StickyTone, { note: string; flag: string }> = {
+export const TONES: Record<StickyTone, { note: string; flag: string }> = {
   amber: {
     note: "bg-[#fef3c7] text-[#78350f]",
     flag: "bg-[#fcd34d] text-[#78350f]",

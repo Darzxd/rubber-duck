@@ -38,6 +38,8 @@ type ToolRailProps = {
   activeTool: ToolId;
   onSelectTool: (tool: ToolId) => void;
   onAiAction?: (action: AiActionId) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
 };
 
 const BUILD: { id: ToolId; label: string; Icon: typeof SelectIcon }[] = [
@@ -79,6 +81,8 @@ export default function ToolRail({
   activeTool,
   onSelectTool,
   onAiAction,
+  onUndo,
+  onRedo,
 }: ToolRailProps) {
   return (
     <div className="no-scrollbar pointer-events-auto absolute left-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-[6.5rem] flex-col gap-2 overflow-y-auto">
@@ -157,6 +161,7 @@ export default function ToolRail({
         <button
           type="button"
           aria-label="Deshacer"
+          onClick={onUndo}
           className="grid size-8 place-items-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800"
         >
           <UndoIcon className="size-4" />
@@ -164,7 +169,8 @@ export default function ToolRail({
         <button
           type="button"
           aria-label="Rehacer"
-          className="grid size-8 place-items-center rounded-lg text-neutral-300 transition-colors dark:text-neutral-600"
+          onClick={onRedo}
+          className="grid size-8 place-items-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800"
         >
           <RedoIcon className="size-4" />
         </button>
