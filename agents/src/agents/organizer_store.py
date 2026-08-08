@@ -20,6 +20,10 @@ def empty_notepad() -> Notepad:
     return {"notes": [], "revision": 0}
 
 
+def empty_board() -> dict:
+    return {"revision": 0, "elements": []}
+
+
 @dataclass
 class SessionState:
     """Live picture of one session: everything said, plus the running summary
@@ -33,6 +37,10 @@ class SessionState:
     # guess at the point of the meeting.
     brief: str = ""
     notepad: Notepad = field(default_factory=empty_notepad)
+    # The last thing the Architect drew. Whoever opens the link after it was
+    # drawn gets an empty canvas otherwise: the stream only carries what
+    # happens from the moment somebody is listening.
+    board: dict = field(default_factory=empty_board)
     last_chunk_at: float = 0.0
     last_summarized: float = 0.0
 
@@ -82,3 +90,7 @@ def set_brief(session_id: str, brief: str) -> str:
 
 def set_notepad(session_id: str, notepad: Notepad) -> None:
     get(session_id).notepad = notepad
+
+
+def set_board(session_id: str, revision: int, elements: list[dict]) -> None:
+    get(session_id).board = {"revision": revision, "elements": elements}

@@ -112,6 +112,7 @@ async def digest(session_id: str) -> dict:
         "digest": s.digest,
         "brief": s.brief,
         "notepad": s.notepad,
+        "board": s.board,
     }
 
 
