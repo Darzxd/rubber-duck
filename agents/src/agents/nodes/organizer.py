@@ -8,7 +8,7 @@ from openai import AsyncOpenAI
 from agents import organizer_store as store
 from agents.bus import emit
 from agents.settings import get_settings
-from agents.state import Thread, TranscriptChunk
+from agents.state import Intent, Thread, TranscriptChunk
 
 logger = logging.getLogger("agents.organizer")
 
@@ -19,11 +19,17 @@ _FILLERS = {
     "si", "sí", "no", "ok", "okay", "vale", "eh", "ehh", "hmm", "aha",
     "ajá", "ya", "bueno", "claro", "listo", "hola", "chao", "adiós",
     "mm", "mhm", "uf", "uy", "ah", "oh", "eee", "pues",
+    "dale", "obvio", "exacto", "perfecto", "genial", "nada",
 }
 
 # How much of a thread we replay to the model. Enough to revise it, not so
 # much that a long thread dominates the prompt.
 RECENT_CHUNKS = 8
+
+# A thread has to carry real material before anyone draws it. The model
+# happily settles a single stray sentence if we let it.
+MIN_CHUNKS = 2
+MIN_SPOKEN_CHARS = 80
 
 
 def is_noise(chunk: TranscriptChunk) -> bool:
@@ -84,6 +90,43 @@ Formato de salida (JSON, sin prosa alrededor):
 }"""
 
 
+def is_substantial(t: Thread) -> bool:
+    if not t["topic"] or len(t["chunks"]) < MIN_CHUNKS:
+        return False
+    return sum(len(c["text"]) for c in t["chunks"]) >= MIN_SPOKEN_CHARS
+
+
+def _text(v) -> str:
+    return v.strip() if isinstance(v, str) else ""
+
+
+def _intents(v) -> list[Intent]:
+    """A model under load returns strings, nulls or half-built objects here.
+    Anything we cannot read as an intent is dropped, never guessed."""
+    out: list[Intent] = []
+    for item in v if isinstance(v, list) else []:
+        if not isinstance(item, dict):
+            continue
+        author, wants = _text(item.get("author")), _text(item.get("wants"))
+        if author and wants:
+            out.append({"author": author, "wants": wants})
+    return out
+
+
+def _questions(v) -> list[str]:
+    return [q.strip() for q in v if isinstance(q, str) and q.strip()] if isinstance(v, list) else []
+
+
+def _indices(v, size: int) -> list[int]:
+    seen: set[int] = set()
+    for i in v if isinstance(v, list) else []:
+        if isinstance(i, bool) or not isinstance(i, int):
+            continue
+        if 0 <= i < size:
+            seen.add(i)
+    return sorted(seen)
+
+
 def _thread_view(t: Thread) -> dict:
     return {
         "id": t["id"],
@@ -138,17 +181,26 @@ async def reconcile(
             store.add_chunk(session_id, c)
         return []
 
+    if not isinstance(data, dict):
+        data = {}
+
     now = time.time()
     ready: list[Thread] = []
 
-    for spec in data.get("threads", []):
-        ids = [
-            i for i in (spec.get("chunk_ids") or []) if 0 <= i < len(new_chunks)
-        ]
+    specs = data.get("threads")
+    for spec in specs if isinstance(specs, list) else []:
+        if not isinstance(spec, dict):
+            continue
+
+        ids = _indices(spec.get("chunk_ids"), len(new_chunks))
         joined = [new_chunks[i] for i in ids]
 
         tid = spec.get("id")
-        existing = store.get(session_id).threads.get(tid) if tid else None
+        existing = (
+            store.get(session_id).threads.get(tid)
+            if isinstance(tid, str) and tid
+            else None
+        )
 
         if existing is None:
             if not joined:
@@ -167,26 +219,28 @@ async def reconcile(
             )
 
         existing["chunks"] = existing["chunks"] + joined
-        existing["topic"] = spec.get("topic") or existing["topic"]
-        existing["summary"] = spec.get("summary") or existing["summary"]
-        existing["intents"] = spec.get("intents") or existing["intents"]
-        existing["open_questions"] = spec.get("open_questions") or []
+        existing["topic"] = _text(spec.get("topic")) or existing["topic"]
+        existing["summary"] = _text(spec.get("summary")) or existing["summary"]
+        existing["intents"] = _intents(spec.get("intents")) or existing["intents"]
+        existing["open_questions"] = _questions(spec.get("open_questions"))
         existing["participants"] = sorted(
             {c["author"] for c in existing["chunks"]}
         )
         if joined:
             existing["last_touched"] = now
 
-        if spec.get("settled") and not existing["dispatched"]:
+        if (
+            spec.get("settled") is True
+            and not existing["dispatched"]
+            and is_substantial(existing)
+        ):
             existing["status"] = "settled"
             ready.append(existing)
 
         store.upsert_thread(session_id, existing)
 
     dropped = [
-        new_chunks[i]
-        for i in (data.get("drop") or [])
-        if 0 <= i < len(new_chunks)
+        new_chunks[i] for i in _indices(data.get("drop"), len(new_chunks))
     ]
     if dropped:
         await emit(

@@ -4,7 +4,7 @@ import time
 
 from agents import organizer_store as store
 from agents.bus import emit
-from agents.nodes.organizer import is_noise, reconcile
+from agents.nodes.organizer import is_noise, is_substantial, reconcile
 from agents.state import Thread, TranscriptChunk
 
 logger = logging.getLogger("agents.organizer.loop")
@@ -49,7 +49,7 @@ def _stale_threads(session_id: str) -> list[Thread]:
     return [
         t
         for t in store.ongoing(session_id)
-        if now - t["last_touched"] >= STALE_SEC and len(t["chunks"]) >= 2
+        if now - t["last_touched"] >= STALE_SEC and is_substantial(t)
     ]
 
 
@@ -90,7 +90,18 @@ async def _run(session_id: str, dispatch) -> None:
                         "participants": thread["participants"],
                     },
                 )
-                await dispatch(session_id, thread)
+                try:
+                    await dispatch(session_id, thread)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    # One bad drawing must not take the session's ears down
+                    # with it. Keep listening.
+                    logger.exception(
+                        "dispatch failed session=%s thread=%s",
+                        session_id,
+                        thread["id"],
+                    )
     except asyncio.CancelledError:
         raise
     except Exception:
