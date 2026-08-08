@@ -15,7 +15,6 @@ import { SAMPLE_AUTHORS, type Author } from "./authors";
 import {
   NOTE_PRESETS,
   hitTest,
-  moveElement,
   newId,
   type BoardElement,
   type Point,
@@ -114,38 +113,9 @@ export default function Whiteboard({
       return;
     }
 
-    if (NOTE_TOOLS.includes(activeTool)) {
-      const preset = NOTE_PRESETS[activeTool];
-      const note: BoardElement = {
-        kind: "note",
-        id: newId(),
-        x: point.x,
-        y: point.y,
-        text: "",
-        tag: preset.tag,
-        tone: preset.tone,
-        ...style,
-      };
-      board.add(note);
-      setEditingId(note.id);
-      setActiveTool("select");
-      return;
-    }
-
-    if (activeTool === "text") {
-      const text: BoardElement = {
-        kind: "text",
-        id: newId(),
-        x: point.x,
-        y: point.y,
-        text: "",
-        ...style,
-      };
-      board.add(text);
-      setEditingId(text.id);
-      setActiveTool("select");
-      return;
-    }
+    // Text and notes are created on release: focusing an editor mid-click lets
+    // the pointerup steal the focus straight back and close it again.
+    if (NOTE_TOOLS.includes(activeTool) || activeTool === "text") return;
 
     if (activeTool === "pen") {
       setDraft({ kind: "path", id: newId(), points: [point], ...style });
@@ -184,9 +154,7 @@ export default function Whiteboard({
       const dx = point.x - drag.last.x;
       const dy = point.y - drag.last.y;
       drag.last = point;
-      board.setElements((current) =>
-        current.map((el) => (el.id === drag.id ? moveElement(el, dx, dy) : el)),
-      );
+      board.moveBy(drag.id, dx, dy);
       return;
     }
 
@@ -214,6 +182,40 @@ export default function Whiteboard({
       dragging.current = null;
       return;
     }
+
+    if (NOTE_TOOLS.includes(activeTool)) {
+      const preset = NOTE_PRESETS[activeTool];
+      const note: BoardElement = {
+        kind: "note",
+        id: newId(),
+        x: origin.current.x,
+        y: origin.current.y,
+        text: "",
+        tag: preset.tag,
+        tone: preset.tone,
+        ...style,
+      };
+      board.add(note);
+      setEditingId(note.id);
+      setActiveTool("select");
+      return;
+    }
+
+    if (activeTool === "text") {
+      const text: BoardElement = {
+        kind: "text",
+        id: newId(),
+        x: origin.current.x,
+        y: origin.current.y,
+        text: "",
+        ...style,
+      };
+      board.add(text);
+      setEditingId(text.id);
+      setActiveTool("select");
+      return;
+    }
+
     if (!draft) return;
 
     // A click with a shape tool is not a shape; drop anything with no size.

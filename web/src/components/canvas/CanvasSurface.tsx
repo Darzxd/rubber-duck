@@ -160,6 +160,15 @@ export default function CanvasSurface({
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    // The chrome floats inside the surface, so its clicks bubble down here.
+    // Capturing the pointer for them would swallow the button's own click.
+    if (
+      event.target instanceof Element &&
+      event.target.closest("[data-board-chrome], input, textarea, button")
+    ) {
+      return;
+    }
+
     // Middle mouse pans too, which is what people reach for by reflex.
     const wantsPan = canPan || event.button === 1;
 
@@ -232,7 +241,9 @@ export default function CanvasSurface({
         {children}
       </div>
 
-      {overlay}
+      <div data-board-chrome className="pointer-events-none">
+        {overlay}
+      </div>
 
       {canPan ? (
         <p className="pointer-events-none absolute bottom-3 left-1/2 z-40 -translate-x-1/2 rounded-full bg-neutral-900/85 px-3 py-1.5 text-[0.7rem] font-medium text-white shadow-lg sm:bottom-16">
