@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import ColorPalette from "./ColorPalette";
 import {
   CORNER_RADII,
@@ -22,6 +21,8 @@ type StyleBarProps = {
   onOpacityChange: (opacity: number) => void;
   /** Shown when the bar is acting on an existing element, not a new one. */
   editingSelection?: boolean;
+  isPaletteOpen: boolean;
+  onTogglePalette: (open: boolean) => void;
 };
 
 const SWATCHES = [
@@ -70,8 +71,9 @@ export default function StyleBar({
   opacity,
   onOpacityChange,
   editingSelection = false,
+  isPaletteOpen,
+  onTogglePalette,
 }: StyleBarProps) {
-  const [isPaletteOpen, setPaletteOpen] = useState(false);
 
   return (
     <div className="pointer-events-auto absolute left-1/2 top-3 z-30 max-w-[calc(100%-1.5rem)] -translate-x-1/2">
@@ -108,7 +110,7 @@ export default function StyleBar({
           title="Más colores"
           aria-label="Más colores"
           aria-expanded={isPaletteOpen}
-          onClick={() => setPaletteOpen((open) => !open)}
+          onClick={() => onTogglePalette(!isPaletteOpen)}
           className={`grid h-7 w-5 place-items-center rounded-md border border-dashed transition-colors ${
             isPaletteOpen
               ? "border-neutral-900 text-neutral-900 dark:border-white dark:text-white"
@@ -229,10 +231,8 @@ export default function StyleBar({
         <div className="absolute left-1/2 top-full z-40 mt-2 -translate-x-1/2">
           <ColorPalette
             color={color}
-            onPick={(picked) => {
-              onColorChange(picked);
-              setPaletteOpen(false);
-            }}
+            onPick={onColorChange}
+            onClose={() => onTogglePalette(false)}
           />
         </div>
       ) : null}

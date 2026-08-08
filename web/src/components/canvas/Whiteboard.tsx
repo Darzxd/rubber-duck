@@ -78,6 +78,7 @@ export default function Whiteboard({
   const [radius, setRadius] = useState(8);
   const [opacity, setOpacity] = useState(100);
   const [shapeKind, setShapeKind] = useState<ShapeKind>("rect");
+  const [isPaletteOpen, setPaletteOpen] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [resetSignal, setResetSignal] = useState(0);
   const [showSidePanel, setShowSidePanel] = useState(true);
@@ -157,6 +158,8 @@ export default function Whiteboard({
 
   function handleDrawStart(point: Point, event: React.PointerEvent) {
     stopEditing();
+    // Touching the board is the natural way to dismiss the palette.
+    setPaletteOpen(false);
     origin.current = point;
 
     if (activeTool !== "select") return;
@@ -461,6 +464,7 @@ export default function Whiteboard({
         if (document.activeElement instanceof HTMLElement) {
           document.activeElement.blur();
         }
+        setPaletteOpen(false);
         board.setSelectedIds([]);
         setEditingId(null);
         setEditingCell(null);
@@ -539,6 +543,8 @@ export default function Whiteboard({
           opacity={live.opacity}
           onOpacityChange={handleOpacityChange}
           editingSelection={board.selectedIds.length > 0}
+          isPaletteOpen={isPaletteOpen}
+          onTogglePalette={setPaletteOpen}
         />
       ) : null}
 

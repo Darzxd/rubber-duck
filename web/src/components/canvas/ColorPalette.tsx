@@ -3,6 +3,7 @@
 type ColorPaletteProps = {
   color: string;
   onPick: (color: string) => void;
+  onClose: () => void;
 };
 
 /**
@@ -21,9 +22,34 @@ const PALETTE: string[][] = [
   ["#fce7f3", "#f9a8d4", "#ec4899", "#be185d", "#831843"],
 ];
 
-export default function ColorPalette({ color, onPick }: ColorPaletteProps) {
+export default function ColorPalette({
+  color,
+  onPick,
+  onClose,
+}: ColorPaletteProps) {
   return (
     <div className="w-max rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-xl shadow-neutral-900/15 dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="mb-2 flex items-center justify-between gap-6">
+        <span className="text-[0.62rem] font-bold uppercase tracking-[0.12em] text-neutral-400">
+          Paleta
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar paleta"
+          className="grid size-5 place-items-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-white"
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true" className="size-3">
+            <path
+              d="M5 5l10 10M15 5L5 15"
+              stroke="currentColor"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+
       <div className="grid grid-flow-col grid-rows-5 gap-1">
         {PALETTE.map((family) =>
           family.map((shade) => (
