@@ -159,6 +159,98 @@ update files
 
 ---
 
+## Tests
+
+- Test what the demo depends on, nothing else. A broken canvas op kills the demo; an untested helper does not.
+- Priority order: the six canvas tools (`crear_nodo`, `conectar`, `editar_nodo`, `mover_nodo`, `pegar_nota`, `borrar`), then session join/close, then agent output parsing.
+- Agent output must be tested against malformed responses. An agent returning bad JSON mid-demo must not crash the canvas — it must be ignored.
+- Tests live under `tests/`, mirroring the structure of the code they cover.
+- Real verification is still two browser tabs and a microphone. Passing tests is not proof the demo works.
+
+---
+
+## 🔒 Operating protocols
+
+Permanent rules. They apply to every session, no exceptions.
+
+### 1. Verifiable closure
+
+No task or session is finished on the agent's narrative report. Before closing, print this block and let the human confirm it:
+
+```
+Shipped:     (what got done)
+Tested:      (what was tested and how)
+Failed:      (what broke)
+Unverified:  (what was NOT verified yet)
+Next:        (what comes next)
+```
+
+"Tests pass" is not closure. Closure explicitly includes what was left unverified. If `Unverified` is empty, justify it — there is almost always something.
+
+### 2. Destructive actions need a written rollback
+
+Before any `git push --force`, deleting files or folders, `git reset --hard`, touching the deployed app, dropping a table, or anything that destroys state, answer these four in writing first:
+
+```
+What can be lost?
+What backup exists?
+How do I go back?
+Which commit or branch is the rollback point?
+```
+
+Without those four answers, do not execute. Then ask the human for explicit confirmation. "I'm going to do it, just letting you know" is not confirmation.
+
+### 3. Secrets and credentials
+
+Never treat real credentials as ordinary setup data. Never print secrets to logs or stdout. Before writing or committing any file that might contain credentials, check:
+
+```
+Are there real tokens or credentials in this file?
+Is it in .gitignore?
+Is there a separate .env.local.example with no real values?
+Did I print any secret to logs or output?
+Does anything need rotating (because it leaked, even briefly)?
+```
+
+If the answer to "did I print a secret" is yes — even for a second, even in a discarded run — rotate it. There is no "it barely happened". The repo is public: `.env.local`, tokens, API keys, the Portal secret key are never committed, never logged, never pasted elsewhere.
+
+### 4. Debug protocol — no blind retries
+
+If a command fails, repeating the same command hoping for a different result is forbidden. Instead:
+
+1. State which assumption failed (what you believed was true and was not).
+2. Give three possible alternative paths.
+3. Pick the safest one and say why.
+4. Verify with a non-interactive command before re-running the original operation.
+
+"Let's try again", "maybe it was intermittent", "I'll retry" are banned as responses to an error. Diagnose first, act after.
+
+### 5. Audits with verifiable sources
+
+When asked to read or audit long files thoroughly, before any summary, print:
+
+```
+Lines read with exact offsets (e.g. lines 1-200, 201-400).
+Files or sections skipped, if any, and why.
+One exact quote backing each conclusion.
+```
+
+"I read it all" is not accepted without that evidence. If you did not read the whole file — context limits or choice — say so and list what was left out. Respect the ranges the human sets: if asked to audit lines X–Y, do not extrapolate beyond them.
+
+### 6. Product rules written before, not after
+
+Before any UI, copy, user-facing message, or product decision, the standard gets written first:
+
+```
+Who is the user?
+What tone do we use?
+What do we NOT do?
+```
+
+Do not improvise product. If the rule is not written in this file or in the repo, ask for it before acting. This applies especially to error copy, empty states, the microphone permission prompt, agent system prompts, and anything a session participant will read on screen.
+
+---
+
 ## How to help
 
 - A working demo beats clean code. Always.
