@@ -3,6 +3,9 @@
 import { Suspense, use, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalProvider } from "@portalsdk/react";
+import AgentRail from "@/components/agents/AgentRail";
+import BriefCard from "@/components/agents/BriefCard";
+import NotetakerPanel from "@/components/agents/NotetakerPanel";
 import BoardGraph from "@/components/canvas/BoardGraph";
 import Whiteboard from "@/components/canvas/Whiteboard";
 import type { Author } from "@/components/canvas/authors";
@@ -10,7 +13,8 @@ import TranscriptOverlay from "@/components/debug/TranscriptOverlay";
 import JoinScreen from "@/components/session/JoinScreen";
 import PresenceLayer from "@/components/session/PresenceLayer";
 import ShareModal from "@/components/session/ShareModal";
-import { useBoardEvents } from "@/lib/board";
+import { postBrief } from "@/lib/agents";
+import { useSessionStream } from "@/lib/board";
 import { portal } from "@/lib/portal";
 import { useSession } from "@/lib/session";
 
@@ -43,12 +47,14 @@ function InvitedJoin({ sessionId }: { sessionId: string }) {
 function BoardView({
   sessionId,
   name,
+  isNew,
   showShareModal,
   onOpenShareModal,
   onCloseShareModal,
 }: {
   sessionId: string;
   name: string;
+  isNew: boolean;
   showShareModal: boolean;
   onOpenShareModal: () => void;
   onCloseShareModal: () => void;
@@ -57,7 +63,7 @@ function BoardView({
     sessionId,
     author: name,
   });
-  const board = useBoardEvents(sessionId);
+  const { board, notes, brief } = useSessionStream(sessionId);
   const [people, setPeople] = useState<Author[]>([]);
 
   return (
@@ -69,6 +75,16 @@ function BoardView({
       >
         <BoardGraph board={board} />
       </Whiteboard>
+      <AgentRail>
+        <BriefCard
+          brief={brief}
+          startOpen={isNew}
+          onSave={(text) => {
+            void postBrief(sessionId, text);
+          }}
+        />
+        <NotetakerPanel notes={notes} />
+      </AgentRail>
       <PresenceLayer sessionId={sessionId} name={name} onRoster={setPeople} />
       <TranscriptOverlay
         recording={recording}
@@ -106,6 +122,7 @@ function SessionInner({ sessionId }: { sessionId: string }) {
     <BoardView
       sessionId={sessionId}
       name={name}
+      isNew={isNew}
       showShareModal={showShareModal}
       onOpenShareModal={() => setShowShareModal(true)}
       onCloseShareModal={closeShareModal}
