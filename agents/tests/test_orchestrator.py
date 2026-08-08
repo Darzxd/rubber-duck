@@ -18,11 +18,11 @@ def digest_of(*points: Point) -> Digest:
 
 
 @pytest.fixture(autouse=True)
-def fresh_clock():
-    """Every test starts with the Critic due, and leaves nothing behind."""
-    orchestrator._last_critic.clear()
+def fresh_session():
+    """Every test starts with nobody having seen anything."""
+    orchestrator._seen.clear()
     yield
-    orchestrator._last_critic.clear()
+    orchestrator._seen.clear()
 
 
 class TestRouting:
@@ -62,23 +62,46 @@ class TestRouting:
         assert orchestrator.route("s", digest_of()) == {}
 
 
-class TestSlowClock:
-    """The board and the lists keep up with the room. Only the Critic, which
-    goes and reads a repo, runs on a slower clock."""
+class TestNobodyWorksForNothing:
+    """Most revisions do not concern everybody. An agent whose part of the
+    summary did not move is not called at all — that is the whole job."""
 
-    def test_the_critic_sits_out_the_next_revision(self):
+    def test_a_question_does_not_touch_the_board(self):
+        board = digest_of(point("usar dagre"))
+        orchestrator.route("s", board)
+
+        after = orchestrator.route(
+            "s", digest_of(point("usar dagre"), point("y el layout", "pregunta"))
+        )
+        assert "architect" not in after
+        assert [p["text"] for p in after["scribe"]] == ["y el layout"]
+
+    def test_the_same_summary_twice_wakes_nobody(self):
         d = digest_of(point("usar dagre"), point("vamos con web", "decision"))
-        assert set(orchestrator.route("s", d)) == {"architect", "critic", "scribe"}
-        assert set(orchestrator.route("s", d)) == {"architect", "scribe"}
+        assert orchestrator.route("s", d)
+        assert orchestrator.route("s", d) == {}
+
+    def test_reordering_the_board_is_a_redraw(self):
+        a, b = point("usar dagre"), point("vamos con web", "decision")
+        orchestrator.route("s", digest_of(a, b))
+        assert "architect" in orchestrator.route("s", digest_of(b, a))
+
+    def test_the_critic_only_sees_a_proposal_once(self):
+        orchestrator.route("s", digest_of(point("usar dagre")))
+
+        after = orchestrator.route(
+            "s", digest_of(point("usar dagre"), point("y React Flow"))
+        )
+        assert [p["text"] for p in after["critic"]] == ["y React Flow"]
+
+    def test_a_point_that_falls_off_the_board_empties_it(self):
+        orchestrator.route("s", digest_of(point("usar dagre")))
+        assert orchestrator.route("s", digest_of())["architect"] == []
 
     def test_a_session_does_not_hold_back_another(self):
         d = digest_of(point("usar dagre"))
         orchestrator.route("s", d)
-        assert "critic" in orchestrator.route("otra", d)
-
-    def test_a_revision_with_nothing_to_check_does_not_spend_the_turn(self):
-        orchestrator.route("s", digest_of(point("vamos con web", "decision")))
-        assert "critic" in orchestrator.route("s", digest_of(point("usar dagre")))
+        assert "architect" in orchestrator.route("otra", d)
 
 
 class TestScribe:

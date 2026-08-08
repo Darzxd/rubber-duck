@@ -1,5 +1,4 @@
 import logging
-import time
 
 from agents.bus import emit
 from agents.graph import graph
@@ -7,17 +6,12 @@ from agents.state import Agent, Digest, Point
 
 logger = logging.getLogger("agents.orchestrator")
 
-# The Critic is the only one that costs anything to run: it goes and reads the
-# team's repo. Nobody is watching its notes tick, so it runs on a slower clock
-# while the board and the lists keep up with the room.
-CRITIC_EVERY_SEC = 20.0
-
-# Who gets what. The Organizer already said what each line is while it was
-# writing the summary, so deciding this costs nothing and stays out of the
-# 3s budget — no second model call before the board moves.
+# What each agent is for. The Organizer already said what every line is while
+# it was writing the summary, so deciding this costs nothing and stays out of
+# the 3s budget — there is no second model call before the board moves.
 #
-# The board is the structure of what is being built, so questions and pending
-# items do not belong on it; they are lists the Scribe keeps. A decision is
+# The board is the structure of what is being built, so a question or a pending
+# item does not belong on it; those are lists the Scribe keeps. A decision is
 # both: it is a node and it is on the record.
 WANTS: dict[str, set[str]] = {
     "architect": {"idea", "decision"},
@@ -27,31 +21,58 @@ WANTS: dict[str, set[str]] = {
     "critic": {"idea"},
 }
 
-_last_critic: dict[str, float] = {}
+# The board and the lists are pictures of a whole state, so they are handed the
+# whole slice — and only when that slice actually moved. The Critic goes and
+# reads a repo, so it only ever gets what it has not looked at yet.
+INCREMENTAL = {"critic"}
+
+# Per session, the last thing each agent was handed.
+_seen: dict[str, dict[str, list[str]]] = {}
 
 
 def route(session_id: str, digest: Digest) -> dict[str, list[Point]]:
-    """Splits the running summary into what each agent should act on. An agent
-    with nothing to act on is not called at all."""
-    critic_due = time.time() - _last_critic.get(session_id, 0.0) >= CRITIC_EVERY_SEC
+    """Decides who has something to do with this revision, and what.
 
+    Most revisions do not concern everybody. Somebody asking a question moves
+    the Scribe's list and leaves the board exactly as it was, and redrawing it
+    anyway is work nobody asked for and a canvas that flickers."""
+    seen = _seen.setdefault(session_id, {})
     routes: dict[str, list[Point]] = {}
-    for agent, kinds in WANTS.items():
-        if agent == "critic" and not critic_due:
-            continue
-        mine = [p for p in digest["points"] if p["kind"] in kinds]
-        if mine:
-            routes[agent] = mine
 
-    if "critic" in routes:
-        _last_critic[session_id] = time.time()
+    for agent, kinds in WANTS.items():
+        mine = [p for p in digest["points"] if p["kind"] in kinds]
+        before = seen.get(agent, [])
+
+        if agent in INCREMENTAL:
+            known = set(before)
+            mine = [p for p in mine if p["id"] not in known]
+            if not mine:
+                continue
+            seen[agent] = before + [p["id"] for p in mine]
+        else:
+            ids = [p["id"] for p in mine]
+            if ids == before:
+                continue
+            seen[agent] = ids
+
+        routes[agent] = mine
+
     return routes
+
+
+def forget(session_id: str) -> None:
+    _seen.pop(session_id, None)
 
 
 async def dispatch(session_id: str, digest: Digest) -> None:
     """Hands each agent the part of the summary that is its business."""
     routes = route(session_id, digest)
     if not routes:
+        logger.info(
+            "rev=%s changed nothing anybody owns session=%s",
+            digest["revision"],
+            session_id,
+        )
         return
 
     agents: list[Agent] = list(routes)  # type: ignore[arg-type]
@@ -61,8 +82,9 @@ async def dispatch(session_id: str, digest: Digest) -> None:
         {
             "revision": digest["revision"],
             "agents": agents,
-            # What went where, so the pipeline can be watched deciding rather
+            # Who was left out, so the pipeline can be watched deciding rather
             # than just firing.
+            "idle": [a for a in WANTS if a not in routes],
             "routes": {
                 agent: [{"text": p["text"], "kind": p["kind"]} for p in points]
                 for agent, points in routes.items()
