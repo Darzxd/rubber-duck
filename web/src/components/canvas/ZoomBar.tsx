@@ -1,4 +1,4 @@
-import { HandIcon, HelpIcon, MinusIcon, PlusIcon } from "./icons";
+import { FullscreenIcon, HandIcon, MinusIcon, PlusIcon } from "./icons";
 
 type ZoomBarProps = {
   zoom: number;
@@ -58,8 +58,8 @@ export default function ZoomBar({
 
       <span className="mx-0.5 h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
 
-      <button type="button" aria-label="Ayuda" className={BUTTON}>
-        <HelpIcon className="size-4" />
+      <button type="button" aria-label="Pantalla completa" className={BUTTON}>
+        <FullscreenIcon className="size-4" />
       </button>
     </div>
   );

@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import AiPanel from "./AiPanel";
-import AiRail, { type PanelId } from "./AiRail";
+import ActionBar from "./ActionBar";
 import ColorPanel from "./ColorPanel";
 import PresenceCursor from "./PresenceCursor";
+import SidePanel from "./SidePanel";
 import ThemeSwitch from "./ThemeSwitch";
 import ToolRail, { type ToolId } from "./ToolRail";
 import TopBar from "./TopBar";
 import ZoomBar from "./ZoomBar";
 import { SAMPLE_AUTHORS, type Author } from "./authors";
+import { SAMPLE_AGENTS } from "./panelData";
 
 type WhiteboardProps = {
   sessionName: string;
@@ -18,8 +19,8 @@ type WhiteboardProps = {
   children?: ReactNode;
 };
 
-/** Tools that draw something, and so care about the colour panel. */
-const DRAWING_TOOLS: ToolId[] = ["pen", "shapes", "text", "arrow"];
+/** Tools that draw something, and so bring the colour panel along. */
+const DRAWING_TOOLS: ToolId[] = ["pen", "shapes", "circle", "text", "arrow"];
 
 const ZOOM_STEP = 10;
 const MIN_ZOOM = 30;
@@ -34,7 +35,6 @@ export default function Whiteboard({
   const [activeTool, setActiveTool] = useState<ToolId>("select");
   const [isDark, setIsDark] = useState(false);
   const [showColorPanel, setShowColorPanel] = useState(false);
-  const [activePanel, setActivePanel] = useState<PanelId | null>("assistant");
   const [color, setColor] = useState("#ff4d4d");
   const [strokeSize, setStrokeSize] = useState(4);
   const [opacity, setOpacity] = useState(100);
@@ -42,12 +42,7 @@ export default function Whiteboard({
 
   function handleSelectTool(tool: ToolId) {
     setActiveTool(tool);
-    // Picking a drawing tool brings its colour controls along with it.
     setShowColorPanel(DRAWING_TOOLS.includes(tool));
-  }
-
-  function handleTogglePanel(panel: PanelId) {
-    setActivePanel((current) => (current === panel ? null : panel));
   }
 
   return (
@@ -57,65 +52,68 @@ export default function Whiteboard({
           <TopBar
             sessionName={sessionName}
             authors={authors}
+            workingAgents={SAMPLE_AGENTS.length}
             onShare={onShare}
           />
 
-          <section
-            aria-label={`Lienzo de ${sessionName}`}
-            className="relative flex-1 overflow-hidden bg-neutral-50 dark:bg-neutral-950"
-            style={{
-              backgroundImage: `radial-gradient(circle, ${
-                isDark ? "#2b2b31" : "#d7d7de"
-              } 1.1px, transparent 1.1px)`,
-              backgroundSize: "22px 22px",
-            }}
-          >
-            {children}
+          <div className="flex flex-1 overflow-hidden">
+            <section
+              aria-label={`Lienzo de ${sessionName}`}
+              className="relative flex-1 overflow-hidden bg-neutral-50 dark:bg-neutral-950"
+              style={{
+                backgroundImage: `radial-gradient(circle, ${
+                  isDark ? "#2b2b31" : "#d7d7de"
+                } 1.1px, transparent 1.1px)`,
+                backgroundSize: "22px 22px",
+              }}
+            >
+              {children}
 
-            {authors.map((author) => (
-              <PresenceCursor key={author.id} author={author} />
-            ))}
+              {authors.map((author) => (
+                <PresenceCursor key={author.id} author={author} />
+              ))}
 
-            <ToolRail activeTool={activeTool} onSelectTool={handleSelectTool} />
-
-            {showColorPanel ? (
-              <ColorPanel
-                color={color}
-                onColorChange={setColor}
-                strokeSize={strokeSize}
-                onStrokeSizeChange={setStrokeSize}
-                opacity={opacity}
-                onOpacityChange={setOpacity}
-                onClose={() => setShowColorPanel(false)}
+              <ToolRail
+                activeTool={activeTool}
+                onSelectTool={handleSelectTool}
               />
-            ) : null}
 
-            <AiRail
-              activePanel={activePanel}
-              onTogglePanel={handleTogglePanel}
-            />
+              {showColorPanel ? (
+                <ColorPanel
+                  color={color}
+                  onColorChange={setColor}
+                  strokeSize={strokeSize}
+                  onStrokeSizeChange={setStrokeSize}
+                  opacity={opacity}
+                  onOpacityChange={setOpacity}
+                  onClose={() => setShowColorPanel(false)}
+                />
+              ) : null}
 
-            {activePanel === "assistant" ? <AiPanel /> : null}
+              <ActionBar />
 
-            <ThemeSwitch
-              isDark={isDark}
-              onToggle={() => setIsDark((dark) => !dark)}
-            />
+              <ThemeSwitch
+                isDark={isDark}
+                onToggle={() => setIsDark((dark) => !dark)}
+              />
 
-            <ZoomBar
-              zoom={zoom}
-              onZoomIn={() =>
-                setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))
-              }
-              onZoomOut={() =>
-                setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))
-              }
-              isPanning={activeTool === "hand"}
-              onTogglePan={() =>
-                handleSelectTool(activeTool === "hand" ? "select" : "hand")
-              }
-            />
-          </section>
+              <ZoomBar
+                zoom={zoom}
+                onZoomIn={() =>
+                  setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))
+                }
+                onZoomOut={() =>
+                  setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))
+                }
+                isPanning={activeTool === "hand"}
+                onTogglePan={() =>
+                  handleSelectTool(activeTool === "hand" ? "select" : "hand")
+                }
+              />
+            </section>
+
+            <SidePanel />
+          </div>
         </div>
       </div>
     </div>

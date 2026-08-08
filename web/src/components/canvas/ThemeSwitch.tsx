@@ -7,7 +7,8 @@ type ThemeSwitchProps = {
 
 export default function ThemeSwitch({ isDark, onToggle }: ThemeSwitchProps) {
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 z-30 flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-2.5 py-1.5 shadow-lg shadow-neutral-900/5 sm:bottom-4 sm:left-4 dark:border-neutral-700 dark:bg-neutral-900">
+    // Sits clear of the tool rail, which now runs the full height on the left.
+    <div className="pointer-events-auto absolute bottom-3 left-[7.5rem] z-30 flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-2.5 py-1.5 shadow-lg shadow-neutral-900/5 sm:bottom-4 dark:border-neutral-700 dark:bg-neutral-900">
       <span className="text-neutral-400 dark:text-neutral-500">
         {isDark ? <MoonIcon /> : <SunIcon />}
       </span>
