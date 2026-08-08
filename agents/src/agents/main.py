@@ -1,16 +1,20 @@
 import asyncio
 import json
+import logging
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from agents.bus import subscribe, unsubscribe
 from agents.graph import graph
 from agents.settings import get_settings
 from agents.state import TranscriptChunk
+
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="rubber-duck agents")
 
@@ -35,6 +39,11 @@ class IngestRequest(BaseModel):
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/working")
+async def working() -> FileResponse:
+    return FileResponse(Path(__file__).parent / "working.html")
 
 
 @app.post("/ingest")
