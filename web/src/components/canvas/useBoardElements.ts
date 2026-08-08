@@ -82,6 +82,15 @@ export function useBoardElements() {
     [checkpoint, commit],
   );
 
+  /** Drops an element without touching history — for undoing a no-op creation. */
+  const discard = useCallback(
+    (id: string) => {
+      commit(current.current.filter((element) => element.id !== id));
+      setSelectedIds((selected) => selected.filter((entry) => entry !== id));
+    },
+    [commit],
+  );
+
   const selectAll = useCallback(() => {
     setSelectedIds(current.current.map((element) => element.id));
   }, []);
@@ -113,6 +122,7 @@ export function useBoardElements() {
     replace,
     moveBy,
     remove,
+    discard,
     undo,
     redo,
   };

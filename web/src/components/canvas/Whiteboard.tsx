@@ -92,6 +92,14 @@ export default function Whiteboard({
   const style = { color, width: strokeSize, opacity };
 
   function stopEditing() {
+    // A text box left empty is invisible but still selectable, so it would
+    // become clutter nobody can see. Drop it instead of keeping a ghost.
+    if (editingId) {
+      const edited = board.elements.find((el) => el.id === editingId);
+      if (edited?.kind === "text" && edited.text.trim() === "") {
+        board.discard(editingId);
+      }
+    }
     setEditingId(null);
     setEditingCell(null);
   }
