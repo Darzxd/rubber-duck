@@ -232,7 +232,11 @@
         const said = points.map((pt) =>
           `<div><b>${esc(pt.author || "alguien")}</b> dice que ${esc(saying(pt.text))}</div>`
         ).join("");
-        const el = row("organizer", "organiza", `rev ${c.revision} · ${points.length} ideas`);
+        const cost = c.took
+          ? ` · modelo ${c.took.toFixed(1)}s sobre ${c.batch} ${c.batch === 1 ? "línea" : "líneas"}`
+          : "";
+        const el = row("organizer", "organiza",
+          `rev ${c.revision} · ${points.length} ideas${cost}`);
         el.insertAdjacentHTML("beforeend",
           (c.summary ? `<div class="gist">${esc(c.summary)}</div>` : "") +
           `<div class="says">${said || "<div>todavía nada que valga la pena</div>"}</div>`);

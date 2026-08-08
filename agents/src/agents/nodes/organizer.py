@@ -204,6 +204,10 @@ async def summarize(session_id: str, fresh: list[TranscriptChunk]) -> Digest | N
             # When the oldest line in this pass was spoken, so a watcher can
             # tell how long the board took to catch up with the room.
             "spoken_at": fresh[0]["ts"] if fresh else None,
+            # The model's share of that wait. What it does not account for is
+            # time the batch spent queued behind the previous pass.
+            "took": round(time.time() - started, 2),
+            "batch": len(fresh),
         },
     )
     return digest
