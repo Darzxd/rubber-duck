@@ -28,6 +28,7 @@ export default function NameField({
         autoFocus
         maxLength={40}
         placeholder="How the team will see you"
+        suppressHydrationWarning
         className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-base text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
       />
     </div>
