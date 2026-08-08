@@ -1,73 +1,172 @@
 import json
 import logging
+import time
 
 from openai import AsyncOpenAI
 
+from agents import canvas
+from agents import organizer_store as store
 from agents.bus import emit
 from agents.settings import get_settings
-from agents.state import GraphState
+from agents.state import GraphState, Point
 
 logger = logging.getLogger("agents.architect")
 
-SYSTEM_PROMPT = """Sos el Architect de una pizarra que se llena sola mientras un equipo habla. Recibís las ideas que el equipo viene diciendo, cada una con su id, y decís CÓMO SE CONECTAN entre sí.
+MAX_GROUPS = 4
+MAX_PER_GROUP = 5
+MAX_WORDS = 4
 
-No escribís ideas nuevas. No renombrás las que hay. Solo trazás flechas entre las que ya existen.
+SYSTEM_PROMPT = """Sos el Architect de una pizarra que se llena sola mientras un equipo habla. Recibís las ideas que se dijeron, cada una con su id, y armás el esquema: qué va con qué, y cómo se relacionan.
 
-Conectá dos ideas solo si la relación se dijo o se desprende directamente de cómo se dijeron:
-- una lleva a la otra ("primero X, después Y")
-- una depende de la otra ("X necesita Y")
-- una se opone a la otra ("o X o Y")
-- una es la causa o el problema de la otra
+No dibujás. Decidís la estructura. Las coordenadas las pone otro.
 
-Si dos ideas simplemente aparecieron en la misma charla, NO las conectes. Un diagrama con dos flechas correctas vale más que uno con diez inventadas. Devolver `edges` vacío es una respuesta correcta.
+QUÉ RECIBÍS:
+- `contexto`: el resumen vivo de la conversación.
+- `ideas`: lo que se dijo, cada una con su `id`. Son las únicas que podés poner en la pizarra.
 
-La etiqueta de la flecha es de 1 a 3 palabras, o vacía.
+CÓMO ARMÁS EL ESQUEMA:
+- Agrupá las ideas por tema. Un grupo es una columna de la pizarra.
+- Máximo 4 grupos. Máximo 5 notas por grupo.
+- Cada nota es UNA idea, nombrada por su `id`. No juntes dos ideas en una nota, no partas una en dos.
+- Si todo lo que hay es del mismo tema, un solo grupo es la respuesta correcta.
+
+CÓMO ESCRIBÍS UNA NOTA:
+- `texto`: de 1 a 4 palabras. Es el título de la idea, no la idea entera. "Usar Stripe", "Límite plan gratis", "Registrar dominio".
+- Nunca una frase. Nunca un verbo conjugado largo. Si no entra en 4 palabras, elegí las 4 que importan.
+- Si una decisión y lo que la causó son dos ideas distintas, son dos notas distintas.
+
+FLECHAS:
+- Conectá dos notas solo si la relación se dijo o se desprende directo de cómo se dijo: una lleva a la otra, una depende de la otra, una se opone a la otra, una es la causa de la otra.
+- Que dos ideas aparezcan en la misma charla NO es una relación. Dos flechas ciertas valen más que diez inventadas. `flechas` vacío es una respuesta correcta.
+- `texto` de la flecha: 1 o 2 palabras, o vacío.
+
+REGLA DURA — NO INVENTAR:
+- Toda nota es una idea de la lista, nombrada por su id. No agregues ideas, tecnologías ni nombres que no aparecieron.
+- El título del grupo y el título general sí los escribís vos, pero describen lo que hay, no lo que falta.
 
 Formato de salida (JSON, sin prosa alrededor):
 {
-  "edges": [
-    {"source": "id de la idea origen", "target": "id de la idea destino", "label": "necesita"}
-  ]
+  "titulo": "2 a 4 palabras",
+  "grupos": [
+    {"titulo": "1 a 3 palabras", "notas": [{"idea": "id_de_la_idea", "texto": "1 a 4 palabras"}]}
+  ],
+  "flechas": [{"de": "id_origen", "a": "id_destino", "texto": "necesita"}]
 }"""
 
 
-def _edges(v, valid: set[str]) -> list[dict]:
-    """Whatever cannot be read as an edge between two ideas we actually have
-    is dropped. The model never gets to invent a node through here."""
-    out: list[dict] = []
-    seen: set[tuple[str, str]] = set()
-    for item in v if isinstance(v, list) else []:
+# Cutting a title at the word limit can leave it hanging on a connector, which
+# reads as a bug rather than as a short title.
+DANGLING = {"y", "e", "o", "u", "de", "del", "en", "para", "con", "a", "la", "el"}
+
+
+def _words(v, limit: int) -> str:
+    if not isinstance(v, str):
+        return ""
+    words = v.split()[:limit]
+    while words and words[-1].lower() in DANGLING:
+        words.pop()
+    return " ".join(words)
+
+
+# What a note says it is comes from the Organizer, which already decided it
+# while writing the summary. Asked to label it again the Architect calls
+# everything an idea, and it has no more evidence than the Organizer had.
+KIND_STYLE = {
+    "decision": "decision",
+    "idea": "idea",
+    "pendiente": "tarea",
+    "pregunta": "duda",
+}
+
+
+def _fallback(point: Point) -> canvas.PlannedNote:
+    """A note for an idea the model left out, written without adding anything.
+
+    The board is replaced whole on every revision, so an idea silently dropped
+    is an idea that disappears off the screen while somebody is reading it."""
+    return {
+        "id": point["id"],
+        "text": _words(point["text"], MAX_WORDS),
+        "kind": KIND_STYLE.get(point["kind"], "idea"),
+    }
+
+
+def _plan(data: dict, points: list[Point]) -> tuple[str, list, list]:
+    """Reads the model's plan, keeping only what maps onto real ideas."""
+    by_id = {p["id"]: p for p in points}
+    placed: set[str] = set()
+    groups: list[canvas.PlannedGroup] = []
+
+    raw_groups = data.get("grupos")
+    for item in (raw_groups if isinstance(raw_groups, list) else [])[:MAX_GROUPS]:
         if not isinstance(item, dict):
             continue
-        source, target = item.get("source"), item.get("target")
+        notes: list[canvas.PlannedNote] = []
+        raw_notes = item.get("notas")
+        for entry in (raw_notes if isinstance(raw_notes, list) else [])[
+            :MAX_PER_GROUP
+        ]:
+            if not isinstance(entry, dict):
+                continue
+            idea = entry.get("idea")
+            if not isinstance(idea, str) or idea not in by_id or idea in placed:
+                continue
+            text = _words(entry.get("texto"), MAX_WORDS)
+            placed.add(idea)
+            notes.append(
+                {
+                    "id": idea,
+                    "text": text or _words(by_id[idea]["text"], MAX_WORDS),
+                    "kind": KIND_STYLE.get(by_id[idea]["kind"], "idea"),
+                }
+            )
+        if notes:
+            groups.append({"title": _words(item.get("titulo"), 3), "notes": notes})
+
+    left = [_fallback(p) for p in points if p["id"] not in placed]
+    if left:
+        # Their own column rather than tacked onto somebody else's theme: the
+        # model did not say they belong there.
+        if len(groups) < MAX_GROUPS:
+            groups.append({"title": "Suelto" if groups else "", "notes": left})
+        else:
+            groups[-1]["notes"].extend(left)
+
+    arrows: list[canvas.PlannedArrow] = []
+    seen: set[tuple[str, str]] = set()
+    raw_arrows = data.get("flechas")
+    for item in raw_arrows if isinstance(raw_arrows, list) else []:
+        if not isinstance(item, dict):
+            continue
+        source, target = item.get("de"), item.get("a")
         if not isinstance(source, str) or not isinstance(target, str):
             continue
-        if source not in valid or target not in valid or source == target:
+        if source not in placed or target not in placed or source == target:
             continue
-        if (source, target) in seen:
+        if (source, target) in seen or (target, source) in seen:
             continue
         seen.add((source, target))
-        label = item.get("label")
-        out.append(
+        arrows.append(
             {
                 "source": source,
                 "target": target,
-                "label": label.strip() if isinstance(label, str) else "",
+                "label": _words(item.get("texto"), 2),
             }
         )
-    return out
+
+    return _words(data.get("titulo"), 4), groups, arrows
 
 
-async def _draw(session_id: str, digest, nodes, edges) -> None:
+async def _draw(session_id: str, revision: int, elements: list[dict]) -> None:
+    store.set_board(session_id, revision, elements)
     await emit(
         session_id,
         "architect.draw",
         {
-            "revision": digest["revision"],
-            # These nodes are the complete state of the board, not an addition.
+            "revision": revision,
+            # This is the complete state of the board, not an addition.
             "replace": True,
-            "nodes": nodes,
-            "edges": edges,
+            "elements": elements,
         },
     )
 
@@ -78,23 +177,14 @@ async def architect(state: GraphState) -> dict:
     # somebody else's list, not a node on the board.
     points = state["routes"]["architect"]
     session_id = state["session_id"]
+    revision = digest["revision"]
+    if not points:
+        return {}
 
-    # Nodes are the Organizer's points verbatim, keeping their content-derived
-    # ids. So a redraw reuses the same node instead of replacing it, and the
-    # Architect has no way to draw something nobody said.
-    nodes = [
-        {"id": p["id"], "label": p["text"], "author": p["author"]}
-        for p in points
-    ]
-
-    # The nodes cost nothing to work out, so they go up now. Waiting for the
-    # arrows would put a model call between speech and the first thing anybody
-    # sees, and that is the whole budget.
-    await _draw(session_id, digest, nodes, [])
-
-    edges: list[dict] = []
     settings = get_settings()
-    if len(points) >= 2 and settings.openai_api_key:
+    data: dict = {}
+    started = time.time()
+    if settings.openai_api_key:
         client = AsyncOpenAI(api_key=settings.openai_api_key)
         try:
             resp = await client.chat.completions.create(
@@ -118,13 +208,22 @@ async def architect(state: GraphState) -> dict:
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )
-            data = json.loads(resp.choices[0].message.content or "{}")
-            if isinstance(data, dict):
-                edges = _edges(data.get("edges"), {p["id"] for p in points})
+            parsed = json.loads(resp.choices[0].message.content or "{}")
+            if isinstance(parsed, dict):
+                data = parsed
         except Exception:
-            # A diagram with no arrows still beats no diagram.
-            logger.exception("architect edges failed; drawing nodes only")
+            # One column of plain notes still beats an empty board.
+            logger.exception("architect plan failed; drawing the ideas flat")
 
-    if edges:
-        await _draw(session_id, digest, nodes, edges)
+    title, groups, arrows = _plan(data, points)
+    elements = canvas.build(title, groups, arrows)
+    logger.info(
+        "architect rev=%s groups=%s notes=%s arrows=%s in %.2fs",
+        revision,
+        len(groups),
+        len(points),
+        len(arrows),
+        time.time() - started,
+    )
+    await _draw(session_id, revision, elements)
     return {}

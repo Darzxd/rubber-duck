@@ -10,11 +10,11 @@ logger = logging.getLogger("agents.orchestrator")
 # it was writing the summary, so deciding this costs nothing and stays out of
 # the 3s budget — there is no second model call before the board moves.
 #
-# The board is the structure of what is being built, so a question or a pending
-# item does not belong on it; those are lists the Scribe keeps. A decision is
-# both: it is a node and it is on the record.
+# The board is the structure of what is being built, so a question does not
+# belong on it; that is a list the Scribe keeps. A pending item does: what
+# blocks a thing is part of how the thing is built.
 WANTS: dict[str, set[str]] = {
-    "architect": {"idea", "decision"},
+    "architect": {"idea", "decision", "pendiente"},
     "scribe": {"decision", "pregunta", "pendiente"},
     # The Critic checks proposals against the repo. A question has nothing to
     # check yet, and a decision is already made.
