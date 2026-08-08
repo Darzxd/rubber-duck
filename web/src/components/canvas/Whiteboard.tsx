@@ -5,7 +5,6 @@ import ActionBar from "./ActionBar";
 import BoardLayer, { type CellRef } from "./BoardLayer";
 import CanvasSurface, { type CanvasApi } from "./CanvasSurface";
 import StyleBar from "./StyleBar";
-import SidePanel from "./SidePanel";
 import ThemeSwitch from "./ThemeSwitch";
 import ToolRail, { type ShapeKind, type ToolId } from "./ToolRail";
 import TopBar from "./TopBar";
@@ -25,7 +24,6 @@ import {
   type Point,
   type StrokeStyle,
 } from "./boardElements";
-import { PanelRightIcon } from "./icons";
 import { SAMPLE_AGENTS } from "./panelData";
 import { useBoardElements } from "./useBoardElements";
 
@@ -85,7 +83,6 @@ export default function Whiteboard({
   const [isPaletteOpen, setPaletteOpen] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [resetSignal, setResetSignal] = useState(0);
-  const [showSidePanel, setShowSidePanel] = useState(true);
   const [draft, setDraft] = useState<BoardElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<CellRef | null>(null);
@@ -538,19 +535,6 @@ export default function Whiteboard({
         onSelectAll={board.selectAll}
       />
 
-      {/* Only offered where the panel can actually show: it is desktop-only. */}
-      {showSidePanel ? null : (
-        <button
-          type="button"
-          onClick={() => setShowSidePanel(true)}
-          title="Mostrar panel de agentes"
-          aria-label="Mostrar panel de agentes"
-          className="pointer-events-auto absolute right-3 top-3 z-30 hidden size-9 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-lg shadow-neutral-900/5 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 lg:grid dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
-        >
-          <PanelRightIcon />
-        </button>
-      )}
-
       {showStyleBar ? (
         <StyleBar
           color={live.color}
@@ -628,10 +612,6 @@ export default function Whiteboard({
               onAddOption={handleAddOption}
             />
           </CanvasSurface>
-
-          {showSidePanel ? (
-            <SidePanel onHide={() => setShowSidePanel(false)} />
-          ) : null}
         </div>
       </div>
 
