@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_organizer_model: str = "gpt-4.1-mini"
     openai_realtime_model: str = "gpt-live-transcribe"
     openai_realtime_language: str = "es"
 

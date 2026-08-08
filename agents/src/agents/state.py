@@ -1,5 +1,5 @@
 from operator import add
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, NotRequired, TypedDict
 
 
 class TranscriptChunk(TypedDict):
@@ -12,6 +12,8 @@ class Thread(TypedDict):
     id: str
     chunks: list[TranscriptChunk]
     settled: bool
+    topic: NotRequired[str]
+    summary: NotRequired[str]
 
 
 class GraphState(TypedDict):
