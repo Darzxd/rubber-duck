@@ -107,8 +107,8 @@
 
   <div class="pipeline">
     <div class="stage" id="st-mishear">
-      <h2>Misheard</h2><div class="big" id="c-unsure">0</div>
-      <div class="sub">low confidence, never sent</div>
+      <h2>Low conf.</h2><div class="big" id="c-unsure">0</div>
+      <div class="sub">flagged, still sent</div>
     </div>
     <div class="arrow">→</div>
     <div class="stage" id="st-ingest">
@@ -242,12 +242,21 @@
         counts.unsure = (counts.unsure || 0) + 1;
         $("c-unsure").textContent = counts.unsure;
         flash("st-mishear");
-        const el = document.createElement("div");
-        el.className = "line dropped";
-        el.innerHTML = `<span class="who">${c.author}</span> ${c.text}` +
-          `<span class="tag">misheard ${c.confidence}</span>`;
-        put("transcript", el);
-        log("unsure", `misheard (${c.confidence}) "${c.text}"`, sid);
+        // The line still reaches the Organizer, so tag the one already there
+        // rather than showing the sentence twice.
+        const match = [...$("transcript").children].find(
+          (n) => n.dataset && n.dataset.text === c.text);
+        const tag = `<span class="tag">low ${c.confidence}</span>`;
+        if (match) {
+          match.insertAdjacentHTML("beforeend", tag);
+        } else {
+          const el = document.createElement("div");
+          el.className = "line";
+          el.dataset.text = c.text;
+          el.innerHTML = `<span class="who">${c.author}</span> ${c.text}${tag}`;
+          put("transcript", el);
+        }
+        log("unsure", `low confidence (${c.confidence}) "${c.text}"`, sid);
         return;
       }
 

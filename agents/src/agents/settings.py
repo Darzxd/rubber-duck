@@ -16,10 +16,7 @@ class Settings(BaseSettings):
     # never closes a segment — we need server VAD to get final transcripts.
     openai_realtime_model: str = "gpt-4o-transcribe"
     openai_realtime_language: str = "es"
-    # Each segment is transcribed on its own, so cutting on a short pause
-    # yields context-free fragments that come back wrong. Wait for a real
-    # end of sentence instead.
-    openai_realtime_silence_ms: int = 1100
+    openai_realtime_silence_ms: int = 600
     # Empty on purpose. The model treats this as preceding text and repeats it
     # verbatim on a short or noisy segment — a list of technologies came back
     # as "confirmamos el backend en Python?".

@@ -75,7 +75,6 @@ export function useSession({ sessionId, author }: SessionArgs): SessionState {
             });
           },
           onUnsure: (text, avgLogprob) => {
-            setInterim("");
             void postUnsure(sessionId, author, text, avgLogprob);
           },
           onError: (message) => setError(message),

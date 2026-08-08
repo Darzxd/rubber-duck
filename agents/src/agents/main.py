@@ -128,8 +128,9 @@ async def threads(session_id: str) -> dict:
 
 @app.post("/unsure")
 async def unsure(req: UnsureRequest) -> dict:
-    """The browser heard something it does not trust. It stops there — this
-    only makes the discard visible on the internals page."""
+    """The browser transcribed something with low token probability. It is
+    still ingested; this only flags it on the internals page so we can tell
+    whether a real cutoff would be worth having."""
     logger.info(
         "unsure session=%s author=%s conf=%.2f text=%r",
         req.session_id,
@@ -175,13 +176,11 @@ async def realtime_session() -> dict:
                     "audio": {
                         "input": {
                             "transcription": transcription,
-                            # Room noise opens segments that hold no speech,
-                            # and the model fills them with invented text.
-                            "noise_reduction": {"type": "near_field"},
+                            # Deliberately bare. Every knob added on top of
+                            # this — threshold, padding, noise reduction —
+                            # made transcription worse, not better.
                             "turn_detection": {
                                 "type": "server_vad",
-                                "threshold": 0.55,
-                                "prefix_padding_ms": 400,
                                 "silence_duration_ms": (
                                     settings.openai_realtime_silence_ms
                                 ),

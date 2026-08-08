@@ -8,19 +8,12 @@
 export type RealtimeCallbacks = {
   onFinal: (text: string) => void;
   onInterim?: (text: string) => void;
-  /** Heard badly enough that we refuse to pass it on. */
+  /** Heard with low confidence. Still passed on, only flagged. */
   onUnsure?: (text: string, avgLogprob: number) => void;
   onError?: (message: string) => void;
 };
 
-export const MIC_CONSTRAINTS: MediaStreamConstraints = {
-  audio: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-    channelCount: 1,
-  },
-};
+export const MIC_CONSTRAINTS: MediaStreamConstraints = { audio: true };
 
 export type RealtimeController = {
   stop: () => void;
@@ -47,9 +40,10 @@ type RealtimeEvent = {
   error?: { message?: string };
 };
 
-// Invented text scores far worse than heard text. -0.9 avg keeps accented
-// speech and drops the segments the model filled in on its own.
-const MIN_AVG_LOGPROB = -0.9;
+// Invented text scores worse than heard text. Nothing is dropped on this —
+// it only flags a segment on the internals page so we can see whether a real
+// cutoff is worth having.
+const SUSPICIOUS_AVG_LOGPROB = -0.9;
 
 function confidence(logprobs?: Logprob[]): number | null {
   if (!logprobs?.length) return null;
@@ -107,9 +101,8 @@ export async function startRealtimeTranscription(
         if (!text) break;
 
         const avg = confidence(event.logprobs);
-        if (avg !== null && avg < MIN_AVG_LOGPROB) {
+        if (avg !== null && avg < SUSPICIOUS_AVG_LOGPROB) {
           callbacks.onUnsure?.(text, avg);
-          break;
         }
         callbacks.onFinal(text);
         break;
