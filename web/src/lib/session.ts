@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { postIngest } from "./agents";
+import { postIngest, postUnsure } from "./agents";
 import {
+  MIC_CONSTRAINTS,
   startRealtimeTranscription,
   type RealtimeController,
 } from "./openai-realtime";
@@ -42,7 +43,7 @@ export function useSession({ sessionId, author }: SessionArgs): SessionState {
 
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
       } catch {
         if (!cancelled) setError("microphone permission denied");
         return;
@@ -72,6 +73,10 @@ export function useSession({ sessionId, author }: SessionArgs): SessionState {
             }).catch((e: unknown) => {
               setError(e instanceof Error ? e.message : "ingest failed");
             });
+          },
+          onUnsure: (text, avgLogprob) => {
+            setInterim("");
+            void postUnsure(sessionId, author, text, avgLogprob);
           },
           onError: (message) => setError(message),
         });

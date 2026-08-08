@@ -106,6 +106,11 @@
   </header>
 
   <div class="pipeline">
+    <div class="stage" id="st-mishear">
+      <h2>Misheard</h2><div class="big" id="c-unsure">0</div>
+      <div class="sub">low confidence, never sent</div>
+    </div>
+    <div class="arrow">→</div>
     <div class="stage" id="st-ingest">
       <h2>Ingest</h2><div class="big" id="c-ingest">0</div>
       <div class="sub">chunks received</div>
@@ -233,6 +238,19 @@
         return;
       }
 
+      if (p.event === "transcript.unsure") {
+        counts.unsure = (counts.unsure || 0) + 1;
+        $("c-unsure").textContent = counts.unsure;
+        flash("st-mishear");
+        const el = document.createElement("div");
+        el.className = "line dropped";
+        el.innerHTML = `<span class="who">${c.author}</span> ${c.text}` +
+          `<span class="tag">misheard ${c.confidence}</span>`;
+        put("transcript", el);
+        log("unsure", `misheard (${c.confidence}) "${c.text}"`, sid);
+        return;
+      }
+
       if (p.event === "organizer.status") {
         if (c.stage === "noise_dropped") {
           counts.noise++;
@@ -321,7 +339,7 @@
   $("reload").addEventListener("click", loadSessions);
   $("clear").addEventListener("click", () => {
     for (const k in counts) counts[k] = 0;
-    ["c-ingest","c-noise","c-buffer","c-organized","c-architect"]
+    ["c-unsure","c-ingest","c-noise","c-buffer","c-organized","c-architect"]
       .forEach((id) => ($(id).textContent = "0"));
     $("log").innerHTML = "";
     $("transcript").innerHTML = '<span class="empty">waiting for speech…</span>';

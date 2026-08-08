@@ -38,6 +38,13 @@ class IngestRequest(BaseModel):
     ts: float
 
 
+class UnsureRequest(BaseModel):
+    session_id: str
+    author: str
+    text: str
+    confidence: float
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}
@@ -97,6 +104,29 @@ async def ingest(req: IngestRequest) -> dict:
     return {"accepted": True, "queued": kept}
 
 
+@app.post("/unsure")
+async def unsure(req: UnsureRequest) -> dict:
+    """The browser heard something it does not trust. It stops there — this
+    only makes the discard visible on the internals page."""
+    logger.info(
+        "unsure session=%s author=%s conf=%.2f text=%r",
+        req.session_id,
+        req.author,
+        req.confidence,
+        req.text,
+    )
+    await emit(
+        req.session_id,
+        "transcript.unsure",
+        {
+            "author": req.author,
+            "text": req.text,
+            "confidence": round(req.confidence, 2),
+        },
+    )
+    return {"ok": True}
+
+
 @app.post("/realtime-session")
 async def realtime_session() -> dict:
     settings = get_settings()
@@ -128,7 +158,7 @@ async def realtime_session() -> dict:
                             "noise_reduction": {"type": "near_field"},
                             "turn_detection": {
                                 "type": "server_vad",
-                                "threshold": 0.75,
+                                "threshold": 0.55,
                                 "prefix_padding_ms": 400,
                                 "silence_duration_ms": (
                                     settings.openai_realtime_silence_ms
@@ -136,6 +166,10 @@ async def realtime_session() -> dict:
                             },
                         }
                     },
+                    # Invented text comes back with low token probability.
+                    # Without this the browser has no way to tell it apart
+                    # from something actually said.
+                    "include": ["item.input_audio_transcription.logprobs"],
                 }
             },
         )

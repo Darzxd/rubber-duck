@@ -8,7 +8,18 @@
 export type RealtimeCallbacks = {
   onFinal: (text: string) => void;
   onInterim?: (text: string) => void;
+  /** Heard badly enough that we refuse to pass it on. */
+  onUnsure?: (text: string, avgLogprob: number) => void;
   onError?: (message: string) => void;
+};
+
+export const MIC_CONSTRAINTS: MediaStreamConstraints = {
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: 1,
+  },
 };
 
 export type RealtimeController = {
@@ -25,13 +36,26 @@ type SessionResponse = {
   client_secret?: { value?: string };
 };
 
+type Logprob = { token: string; logprob: number };
+
 type RealtimeEvent = {
   type: string;
   item_id?: string;
   delta?: string;
   transcript?: string;
+  logprobs?: Logprob[];
   error?: { message?: string };
 };
+
+// Invented text scores far worse than heard text. -0.9 avg keeps accented
+// speech and drops the segments the model filled in on its own.
+const MIN_AVG_LOGPROB = -0.9;
+
+function confidence(logprobs?: Logprob[]): number | null {
+  if (!logprobs?.length) return null;
+  const total = logprobs.reduce((sum, l) => sum + l.logprob, 0);
+  return total / logprobs.length;
+}
 
 export async function startRealtimeTranscription(
   stream: MediaStream,
@@ -80,7 +104,14 @@ export async function startRealtimeTranscription(
         const itemId = event.item_id ?? "_";
         interimByItem.delete(itemId);
         const text = (event.transcript ?? "").trim();
-        if (text) callbacks.onFinal(text);
+        if (!text) break;
+
+        const avg = confidence(event.logprobs);
+        if (avg !== null && avg < MIN_AVG_LOGPROB) {
+          callbacks.onUnsure?.(text, avg);
+          break;
+        }
+        callbacks.onFinal(text);
         break;
       }
       case "error": {
