@@ -1,3 +1,4 @@
+import { PEN_NIBS, type PenNib } from "./boardElements";
 import {
   ArrowToolIcon,
   CircleToolIcon,
@@ -47,6 +48,8 @@ type ToolRailProps = {
   onSelectTool: (tool: ToolId) => void;
   shapeKind: ShapeKind;
   onShapeKindChange: (kind: ShapeKind) => void;
+  penNib: PenNib;
+  onPenNibChange: (nib: PenNib) => void;
   onAiAction?: (action: AiActionId) => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -104,6 +107,8 @@ export default function ToolRail({
   onSelectTool,
   shapeKind,
   onShapeKindChange,
+  penNib,
+  onPenNibChange,
   onAiAction,
   onUndo,
   onRedo,
@@ -160,6 +165,37 @@ export default function ToolRail({
             />
           </button>
         </div>
+
+        {activeTool === "pen" ? (
+          <div className="mt-1 border-t border-neutral-200 pt-1.5 dark:border-neutral-700">
+            <p className={SECTION_LABEL}>Punta</p>
+            {(Object.keys(PEN_NIBS) as PenNib[]).map((nib) => (
+              <button
+                key={nib}
+                type="button"
+                aria-label={PEN_NIBS[nib].label}
+                aria-pressed={penNib === nib}
+                onClick={() => onPenNibChange(nib)}
+                className={`${ROW} ${
+                  penNib === nib
+                    ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-white"
+                    : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                }`}
+              >
+                <svg viewBox="0 0 24 10" aria-hidden="true" className="h-2.5 w-6 shrink-0">
+                  <path
+                    d="M2 5h20"
+                    stroke="currentColor"
+                    strokeWidth={PEN_NIBS[nib].width / 2.2}
+                    strokeLinecap={PEN_NIBS[nib].cap}
+                    opacity={PEN_NIBS[nib].opacity / 100}
+                  />
+                </svg>
+                {PEN_NIBS[nib].label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {/* Expands in place. A flyout beside the rail gets clipped, because the
             rail scrolls and anything past its 6.5rem width is cut off. */}

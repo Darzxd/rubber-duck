@@ -3,7 +3,6 @@
 import ColorPalette from "./ColorPalette";
 import {
   CORNER_RADII,
-  OPACITIES,
   STROKE_STYLES,
   type StrokeStyle,
 } from "./boardElements";
@@ -207,24 +206,26 @@ export default function StyleBar({
       <span className={DIVIDER} />
 
       {/* Transparency */}
-      <div className="flex shrink-0 items-center gap-1">
-        {OPACITIES.map((value) => (
-          <button
-            key={value}
-            type="button"
-            title={`Transparencia ${100 - value}%`}
-            aria-label={`Opacidad ${value}%`}
-            aria-pressed={value === opacity}
-            onClick={() => onOpacityChange(value)}
-            className={`${PILL} ${value === opacity ? ON : OFF}`}
-          >
-            <span
-              className="size-4 rounded-full ring-1 ring-inset ring-black/15"
-              style={{ backgroundColor: color, opacity: value / 100 }}
-            />
-          </button>
-        ))}
-        </div>
+      <label className="flex shrink-0 items-center gap-1.5 pr-1" title="Transparencia">
+        <span
+          aria-hidden="true"
+          className="size-4 shrink-0 rounded-full ring-1 ring-inset ring-black/15"
+          style={{ backgroundColor: color, opacity: opacity / 100 }}
+        />
+        <input
+          type="range"
+          min={5}
+          max={100}
+          step={5}
+          value={opacity}
+          onChange={(event) => onOpacityChange(Number(event.target.value))}
+          aria-label="Opacidad"
+          className="w-16 accent-neutral-900 dark:accent-white"
+        />
+        <span className="w-8 text-right text-[0.65rem] font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
+          {opacity}%
+        </span>
+        </label>
       </div>
 
       {isPaletteOpen ? (

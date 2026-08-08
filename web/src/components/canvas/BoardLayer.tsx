@@ -34,7 +34,7 @@ function Shape({ element }: { element: BoardElement }) {
   const stroke = {
     stroke: element.color,
     strokeWidth: element.width,
-    strokeLinecap: "round" as const,
+    strokeLinecap: element.cap,
     strokeLinejoin: "round" as const,
     strokeDasharray: dashArray(element.dash, element.width),
     opacity: element.opacity / 100,
