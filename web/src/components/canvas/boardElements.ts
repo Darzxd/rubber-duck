@@ -4,6 +4,22 @@ export type Point = { x: number; y: number };
 
 export type StrokeStyle = "solid" | "dashed" | "dotted";
 
+/** Which drawing instrument laid the stroke down. */
+export type PenNib = "fine" | "marker" | "highlighter";
+
+/**
+ * Each nib is just a preset of the same three knobs, so anything drawn stays
+ * editable with the normal style controls afterwards.
+ */
+export const PEN_NIBS: Record<
+  PenNib,
+  { label: string; width: number; opacity: number; cap: "round" | "butt" }
+> = {
+  fine: { label: "Fino", width: 2, opacity: 100, cap: "round" },
+  marker: { label: "Marcador", width: 10, opacity: 95, cap: "round" },
+  highlighter: { label: "Resaltador", width: 26, opacity: 28, cap: "butt" },
+};
+
 type Base = {
   id: string;
   color: string;
@@ -12,6 +28,8 @@ type Base = {
   dash: StrokeStyle;
   /** Corner rounding in px; only the boxy shapes use it. */
   radius: number;
+  /** Flat ends read as a marker; round ends as a pen. */
+  cap: "round" | "butt";
 };
 
 /** Turns a stroke style into an SVG dash pattern scaled to the line width. */

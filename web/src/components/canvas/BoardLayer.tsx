@@ -34,7 +34,7 @@ function Shape({ element }: { element: BoardElement }) {
   const stroke = {
     stroke: element.color,
     strokeWidth: element.width,
-    strokeLinecap: "round" as const,
+    strokeLinecap: element.cap,
     strokeLinejoin: "round" as const,
     strokeDasharray: dashArray(element.dash, element.width),
     opacity: element.opacity / 100,
@@ -258,9 +258,14 @@ export default function BoardLayer({
               style={{ left: element.x, top: element.y }}
             >
               <div
-                className="grid overflow-hidden rounded-md border border-neutral-300 bg-white shadow-sm dark:border-neutral-600 dark:bg-neutral-900"
+                className="grid overflow-hidden bg-white shadow-sm dark:bg-neutral-900"
                 style={{
                   gridTemplateColumns: `repeat(${cols}, ${element.cellW}px)`,
+                  // The table follows the same colour, rounding and opacity
+                  // controls as everything else on the board.
+                  border: `${element.width / 2}px solid ${element.color}`,
+                  borderRadius: element.radius,
+                  opacity: element.opacity / 100,
                 }}
               >
                 {element.cells.map((row, rowIndex) =>
@@ -274,12 +279,18 @@ export default function BoardLayer({
                     return (
                       <div
                         key={`${rowIndex}-${colIndex}`}
-                        className={`overflow-hidden border-b border-r border-neutral-200 px-2 text-[0.78rem] leading-tight dark:border-neutral-700 ${
+                        className={`overflow-hidden border-b border-r px-2 text-[0.78rem] leading-tight ${
                           header
-                            ? "bg-neutral-100 font-semibold text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100"
+                            ? "font-semibold text-neutral-800 dark:text-neutral-100"
                             : "text-neutral-700 dark:text-neutral-200"
                         }`}
-                        style={{ height: element.cellH, lineHeight: `${element.cellH}px` }}
+                        style={{
+                          height: element.cellH,
+                          lineHeight: `${element.cellH}px`,
+                          borderColor: `${element.color}40`,
+                          // A wash of the same colour marks the header row.
+                          backgroundColor: header ? `${element.color}14` : undefined,
+                        }}
                       >
                         {editing ? (
                           <input

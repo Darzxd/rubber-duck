@@ -13,6 +13,7 @@ import ZoomBar from "./ZoomBar";
 import type { Author } from "./authors";
 import {
   NOTE_PRESETS,
+  PEN_NIBS,
   TABLE_DEFAULTS,
   cellAt,
   emptyCells,
@@ -20,6 +21,7 @@ import {
   newId,
   newPoll,
   type BoardElement,
+  type PenNib,
   type Point,
   type StrokeStyle,
 } from "./boardElements";
@@ -78,6 +80,8 @@ export default function Whiteboard({
   const [radius, setRadius] = useState(8);
   const [opacity, setOpacity] = useState(100);
   const [shapeKind, setShapeKind] = useState<ShapeKind>("rect");
+  const [penNib, setPenNib] = useState<PenNib>("fine");
+  const [cap, setCap] = useState<"round" | "butt">("round");
   const [isPaletteOpen, setPaletteOpen] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [resetSignal, setResetSignal] = useState(0);
@@ -94,7 +98,21 @@ export default function Whiteboard({
   /** Cell to open on release: focusing it now lets pointerup steal the focus. */
   const pendingCell = useRef<CellRef | null>(null);
 
-  const style = { color, width: strokeSize, opacity, dash, radius };
+  const style = { color, width: strokeSize, opacity, dash, radius, cap };
+
+  /** A nib is a preset: it just moves the same width/opacity/cap knobs. */
+  function handlePenNibChange(nib: PenNib) {
+    const preset = PEN_NIBS[nib];
+    setPenNib(nib);
+    setStrokeSize(preset.width);
+    setOpacity(preset.opacity);
+    setCap(preset.cap);
+    applyToSelection({
+      width: preset.width,
+      opacity: preset.opacity,
+      cap: preset.cap,
+    });
+  }
 
   function stopEditing() {
     // A text box left empty is invisible but still selectable, so it would
@@ -500,10 +518,11 @@ export default function Whiteboard({
     radius: selected?.radius ?? radius,
     opacity: selected?.opacity ?? opacity,
   };
+  // Also for the stamps, so a colour can be chosen before dropping one.
   const showStyleBar =
     board.selectedIds.length > 0 ||
     DRAWING_TOOLS.includes(activeTool) ||
-    NOTE_TOOLS.includes(activeTool);
+    STAMP_TOOLS.includes(activeTool);
 
   const overlay = (
     <>
@@ -512,6 +531,8 @@ export default function Whiteboard({
         onSelectTool={handleSelectTool}
         shapeKind={shapeKind}
         onShapeKindChange={setShapeKind}
+        penNib={penNib}
+        onPenNibChange={handlePenNibChange}
         onUndo={board.undo}
         onRedo={board.redo}
         onSelectAll={board.selectAll}
