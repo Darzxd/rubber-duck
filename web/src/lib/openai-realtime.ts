@@ -4,12 +4,16 @@
 // against api.openai.com — audio track sends the mic; a data channel
 // receives transcription events. The ephemeral client_secret is minted by
 // our backend so the real OPENAI_API_KEY never touches the browser.
+//
+// The model is gpt-live-transcribe: it emits deltas while the person is
+// still talking, and accepts no server-side turn detection at all. Closing a
+// turn is therefore our job — see the silence watcher below.
 
 export type RealtimeCallbacks = {
+  /** A turn closed. This is what reaches the agents. */
   onFinal: (text: string) => void;
+  /** Text so far for the turn being spoken. Fires several times a second. */
   onInterim?: (text: string) => void;
-  /** Heard with low confidence. Still passed on, only flagged. */
-  onUnsure?: (text: string, avgLogprob: number) => void;
   onError?: (message: string) => void;
 };
 
@@ -24,31 +28,59 @@ const AGENTS_URL =
 
 const OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/calls";
 
+// How quiet, and for how long, counts as the end of a turn. Short enough that
+// the board reacts inside the 3s budget, long enough to survive the pause
+// somebody takes mid-sentence to think.
+const SILENCE_RMS = 0.012;
+const SILENCE_MS = 700;
+const SILENCE_POLL_MS = 100;
+
 type SessionResponse = {
   value?: string;
   client_secret?: { value?: string };
 };
-
-type Logprob = { token: string; logprob: number };
 
 type RealtimeEvent = {
   type: string;
   item_id?: string;
   delta?: string;
   transcript?: string;
-  logprobs?: Logprob[];
   error?: { message?: string };
 };
 
-// Invented text scores worse than heard text. Nothing is dropped on this —
-// it only flags a segment on the internals page so we can see whether a real
-// cutoff is worth having.
-const SUSPICIOUS_AVG_LOGPROB = -0.9;
+/** Watches the mic and calls back once the speaker has gone quiet. */
+function watchSilence(stream: MediaStream, onSilence: () => void) {
+  const ctx = new AudioContext();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  ctx.createMediaStreamSource(stream).connect(analyser);
 
-function confidence(logprobs?: Logprob[]): number | null {
-  if (!logprobs?.length) return null;
-  const total = logprobs.reduce((sum, l) => sum + l.logprob, 0);
-  return total / logprobs.length;
+  const buf = new Float32Array(analyser.fftSize);
+  let quietFor = 0;
+  let fired = true; // nothing said yet, so nothing to close
+
+  const timer = setInterval(() => {
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += v * v;
+    const rms = Math.sqrt(sum / buf.length);
+
+    if (rms > SILENCE_RMS) {
+      quietFor = 0;
+      fired = false;
+      return;
+    }
+    quietFor += SILENCE_POLL_MS;
+    if (!fired && quietFor >= SILENCE_MS) {
+      fired = true;
+      onSilence();
+    }
+  }, SILENCE_POLL_MS);
+
+  return () => {
+    clearInterval(timer);
+    void ctx.close().catch(() => undefined);
+  };
 }
 
 export async function startRealtimeTranscription(
@@ -75,8 +107,20 @@ export async function startRealtimeTranscription(
   pc.addTrack(track, stream);
 
   const dc = pc.createDataChannel("oai-events");
-  // Buffer partials per item so we can emit a growing interim string.
+  // Buffer partials per item: the docs warn that ordering across turns is not
+  // guaranteed, so everything reconciles by item_id.
   const interimByItem = new Map<string, string>();
+
+  // What the model has emitted for the current turn but has not closed. If a
+  // commit never lands, this is still the truth of what was said.
+  let openText = "";
+
+  const flush = () => {
+    const text = openText.trim();
+    openText = "";
+    interimByItem.clear();
+    if (text) callbacks.onFinal(text);
+  };
 
   dc.addEventListener("message", (e: MessageEvent<string>) => {
     let event: RealtimeEvent;
@@ -89,22 +133,15 @@ export async function startRealtimeTranscription(
       case "conversation.item.input_audio_transcription.delta": {
         const itemId = event.item_id ?? "_";
         const prev = interimByItem.get(itemId) ?? "";
-        const next = prev + (event.delta ?? "");
-        interimByItem.set(itemId, next);
-        callbacks.onInterim?.(next);
+        interimByItem.set(itemId, prev + (event.delta ?? ""));
+        openText = [...interimByItem.values()].join(" ").trim();
+        callbacks.onInterim?.(openText);
         break;
       }
       case "conversation.item.input_audio_transcription.completed": {
         const itemId = event.item_id ?? "_";
-        interimByItem.delete(itemId);
-        const text = (event.transcript ?? "").trim();
-        if (!text) break;
-
-        const avg = confidence(event.logprobs);
-        if (avg !== null && avg < SUSPICIOUS_AVG_LOGPROB) {
-          callbacks.onUnsure?.(text, avg);
-        }
-        callbacks.onFinal(text);
+        interimByItem.set(itemId, (event.transcript ?? "").trim());
+        openText = [...interimByItem.values()].join(" ").trim();
         break;
       }
       case "error": {
@@ -132,8 +169,23 @@ export async function startRealtimeTranscription(
   const answerSdp = await sdpRes.text();
   await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
+  const stopWatching = watchSilence(stream, () => {
+    // Ask the server to close the turn, then hand over what we have. The
+    // commit is best effort: over WebRTC the audio never went through the
+    // input buffer, so the server may ignore it. The flush is what we rely on.
+    if (dc.readyState === "open") {
+      try {
+        dc.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      } catch {
+        // ignore
+      }
+    }
+    flush();
+  });
+
   return {
     stop: () => {
+      stopWatching();
       try {
         dc.close();
       } catch {

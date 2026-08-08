@@ -38,13 +38,6 @@ class IngestRequest(BaseModel):
     ts: float
 
 
-class UnsureRequest(BaseModel):
-    session_id: str
-    author: str
-    text: str
-    confidence: float
-
-
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}
@@ -126,50 +119,22 @@ async def threads(session_id: str) -> dict:
     }
 
 
-@app.post("/unsure")
-async def unsure(req: UnsureRequest) -> dict:
-    """The browser transcribed something with low token probability. It is
-    still ingested; this only flags it on the internals page so we can tell
-    whether a real cutoff would be worth having."""
-    logger.info(
-        "unsure session=%s author=%s conf=%.2f text=%r",
-        req.session_id,
-        req.author,
-        req.confidence,
-        req.text,
-    )
-    await emit(
-        req.session_id,
-        "transcript.unsure",
-        {
-            "author": req.author,
-            "text": req.text,
-            "confidence": round(req.confidence, 2),
-        },
-    )
-    return {"ok": True}
-
-
 @app.post("/realtime-session")
 async def realtime_session() -> dict:
     settings = get_settings()
     if not settings.openai_api_key:
         raise HTTPException(500, "OPENAI_API_KEY is not set")
 
-    turn_detection = {
-        "type": "semantic_vad",
-        "eagerness": settings.openai_realtime_eagerness,
-    }
-    logger.info("realtime session turn_detection=%s", turn_detection)
-
     transcription: dict = {
         "model": settings.openai_realtime_model,
-        "languages": [settings.openai_realtime_language],
+        "languages": list(settings.openai_realtime_languages),
+        "delay": settings.openai_realtime_delay,
     }
     if settings.openai_realtime_keywords:
         transcription["keywords"] = list(settings.openai_realtime_keywords)
     if settings.openai_realtime_prompt:
         transcription["prompt"] = settings.openai_realtime_prompt
+    logger.info("realtime session transcription=%s", transcription)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         r = await client.post(
@@ -184,13 +149,10 @@ async def realtime_session() -> dict:
                     "audio": {
                         "input": {
                             "transcription": transcription,
-                            "turn_detection": turn_detection,
+                            # This model rejects every turn_detection value.
+                            "turn_detection": None,
                         }
                     },
-                    # Invented text comes back with low token probability.
-                    # Without this the browser has no way to tell it apart
-                    # from something actually said.
-                    "include": ["item.input_audio_transcription.logprobs"],
                 }
             },
         )

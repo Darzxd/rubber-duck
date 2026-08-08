@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { postIngest, postUnsure } from "./agents";
+import { postIngest } from "./agents";
 import {
   MIC_CONSTRAINTS,
   startRealtimeTranscription,
@@ -73,9 +73,6 @@ export function useSession({ sessionId, author }: SessionArgs): SessionState {
             }).catch((e: unknown) => {
               setError(e instanceof Error ? e.message : "ingest failed");
             });
-          },
-          onUnsure: (text, avgLogprob) => {
-            void postUnsure(sessionId, author, text, avgLogprob);
           },
           onError: (message) => setError(message),
         });

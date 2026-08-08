@@ -106,11 +106,6 @@
   </header>
 
   <div class="pipeline">
-    <div class="stage" id="st-mishear">
-      <h2>Low conf.</h2><div class="big" id="c-unsure">0</div>
-      <div class="sub">flagged, still sent</div>
-    </div>
-    <div class="arrow">→</div>
     <div class="stage" id="st-ingest">
       <h2>Ingest</h2><div class="big" id="c-ingest">0</div>
       <div class="sub">chunks received</div>
@@ -238,28 +233,6 @@
         return;
       }
 
-      if (p.event === "transcript.unsure") {
-        counts.unsure = (counts.unsure || 0) + 1;
-        $("c-unsure").textContent = counts.unsure;
-        flash("st-mishear");
-        // The line still reaches the Organizer, so tag the one already there
-        // rather than showing the sentence twice.
-        const match = [...$("transcript").children].find(
-          (n) => n.dataset && n.dataset.text === c.text);
-        const tag = `<span class="tag">low ${c.confidence}</span>`;
-        if (match) {
-          match.insertAdjacentHTML("beforeend", tag);
-        } else {
-          const el = document.createElement("div");
-          el.className = "line";
-          el.dataset.text = c.text;
-          el.innerHTML = `<span class="who">${c.author}</span> ${c.text}${tag}`;
-          put("transcript", el);
-        }
-        log("unsure", `low confidence (${c.confidence}) "${c.text}"`, sid);
-        return;
-      }
-
       if (p.event === "organizer.status") {
         if (c.stage === "noise_dropped") {
           counts.noise++;
@@ -348,7 +321,7 @@
   $("reload").addEventListener("click", loadSessions);
   $("clear").addEventListener("click", () => {
     for (const k in counts) counts[k] = 0;
-    ["c-unsure","c-ingest","c-noise","c-buffer","c-organized","c-architect"]
+    ["c-ingest","c-noise","c-buffer","c-organized","c-architect"]
       .forEach((id) => ($(id).textContent = "0"));
     $("log").innerHTML = "";
     $("transcript").innerHTML = '<span class="empty">waiting for speech…</span>';

@@ -12,11 +12,16 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_organizer_model: str = "gpt-4.1-mini"
-    # gpt-live-transcribe rejects turn_detection outright, so it never closes a
-    # segment on its own. gpt-transcribe takes semantic VAD and, unlike
-    # gpt-4o-transcribe, carries earlier turns as context into the next one.
-    openai_realtime_model: str = "gpt-transcribe"
-    openai_realtime_language: str = "es"
+    # The only model that emits deltas while somebody is still talking. Every
+    # other one waits for the turn to close, which costs us 3-6s of dead screen.
+    # It refuses turn_detection of any kind (verified against the API, twice),
+    # so segments close on our side or not at all.
+    openai_realtime_model: str = "gpt-live-transcribe"
+    # Plural on purpose: this model rejects the singular `language`.
+    openai_realtime_languages: tuple[str, ...] = ("es",)
+    # minimal | low | medium | high | xhigh. More delay buys the model more
+    # audio context per emission. "low" is the floor that still reads as live.
+    openai_realtime_delay: str = "low"
     # Literal hints, not preceding text — this is the safe way to feed
     # vocabulary in. Keep it short: every term here biases what it hears.
     openai_realtime_keywords: tuple[str, ...] = (
@@ -26,11 +31,8 @@ class Settings(BaseSettings):
         "Next.js",
         "Vercel",
         "LangGraph",
+        "dagre",
     )
-    # Accuracy over speed: a whole thought in one segment transcribes far
-    # better than the same words cut into fragments, because each segment is
-    # transcribed without the context of the others.
-    openai_realtime_eagerness: str = "low"
     # Empty on purpose. The model treats this as preceding text and repeats it
     # verbatim on a short or noisy segment — a list of technologies came back
     # as "confirmamos el backend en Python?".
