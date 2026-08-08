@@ -52,75 +52,69 @@ export default function Whiteboard({
     setResetSignal((signal) => signal + 1);
   }
 
+  const overlay = (
+    <>
+      <ToolRail activeTool={activeTool} onSelectTool={handleSelectTool} />
+
+      {showColorPanel ? (
+        <ColorPanel
+          color={color}
+          onColorChange={setColor}
+          strokeSize={strokeSize}
+          onStrokeSizeChange={setStrokeSize}
+          opacity={opacity}
+          onOpacityChange={setOpacity}
+          onClose={() => setShowColorPanel(false)}
+        />
+      ) : null}
+
+      <ActionBar />
+
+      <ThemeSwitch
+        isDark={isDark}
+        onToggle={() => setIsDark((dark) => !dark)}
+      />
+
+      <ZoomBar
+        zoom={zoom}
+        onZoomIn={() => setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))}
+        onZoomOut={() => setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))}
+        isPanning={activeTool === "hand"}
+        onTogglePan={() =>
+          handleSelectTool(activeTool === "hand" ? "select" : "hand")
+        }
+        onResetView={handleResetView}
+      />
+    </>
+  );
+
   return (
     <div className={isDark ? "dark" : undefined}>
-      <div className="flex h-dvh flex-col bg-neutral-100 p-2 sm:p-3 dark:bg-black">
-        <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-300 bg-white shadow-xl shadow-neutral-900/10 sm:rounded-3xl dark:border-neutral-800 dark:bg-neutral-900">
-          <TopBar
-            sessionName={sessionName}
-            authors={authors}
-            workingAgents={SAMPLE_AGENTS.length}
-            onShare={onShare}
-          />
+      {/* Full bleed: the board is the app, not a card floating inside it. */}
+      <div className="flex h-dvh flex-col overflow-hidden bg-white dark:bg-neutral-900">
+        <TopBar
+          sessionName={sessionName}
+          authors={authors}
+          workingAgents={SAMPLE_AGENTS.length}
+          onShare={onShare}
+        />
 
-          <div className="flex flex-1 overflow-hidden">
-            <CanvasSurface
-              isDark={isDark}
-              zoom={zoom}
-              forcePan={activeTool === "hand"}
-              resetSignal={resetSignal}
-              overlay={
-                <>
-                  <ToolRail
-                    activeTool={activeTool}
-                    onSelectTool={handleSelectTool}
-                  />
+        <div className="flex flex-1 overflow-hidden">
+          <CanvasSurface
+            isDark={isDark}
+            zoom={zoom}
+            forcePan={activeTool === "hand"}
+            resetSignal={resetSignal}
+            overlay={overlay}
+          >
+            {children}
 
-                  {showColorPanel ? (
-                    <ColorPanel
-                      color={color}
-                      onColorChange={setColor}
-                      strokeSize={strokeSize}
-                      onStrokeSizeChange={setStrokeSize}
-                      opacity={opacity}
-                      onOpacityChange={setOpacity}
-                      onClose={() => setShowColorPanel(false)}
-                    />
-                  ) : null}
+            {authors.map((author) => (
+              <PresenceCursor key={author.id} author={author} />
+            ))}
+          </CanvasSurface>
 
-                  <ActionBar />
-
-                  <ThemeSwitch
-                    isDark={isDark}
-                    onToggle={() => setIsDark((dark) => !dark)}
-                  />
-
-                  <ZoomBar
-                    zoom={zoom}
-                    onZoomIn={() =>
-                      setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP))
-                    }
-                    onZoomOut={() =>
-                      setZoom((value) => Math.max(MIN_ZOOM, value - ZOOM_STEP))
-                    }
-                    isPanning={activeTool === "hand"}
-                    onTogglePan={() =>
-                      handleSelectTool(activeTool === "hand" ? "select" : "hand")
-                    }
-                    onResetView={handleResetView}
-                  />
-                </>
-              }
-            >
-              {children}
-
-              {authors.map((author) => (
-                <PresenceCursor key={author.id} author={author} />
-              ))}
-            </CanvasSurface>
-
-            <SidePanel />
-          </div>
+          <SidePanel />
         </div>
       </div>
     </div>
