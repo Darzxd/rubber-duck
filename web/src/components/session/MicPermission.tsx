@@ -9,7 +9,7 @@ const MESSAGES: Record<MicStatus, string> = {
   requesting: "Esperando que permitas el micrófono…",
   granted: "Micrófono listo.",
   denied:
-    "El micrófono está bloqueado. Habilitalo desde el ícono en la barra de direcciones y probá de nuevo.",
+    "El micrófono está bloqueado. Habilítalo desde el ícono en la barra de direcciones y vuelve a intentar.",
 };
 
 const TONES: Record<MicStatus, string> = {

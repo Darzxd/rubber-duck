@@ -10,11 +10,11 @@ import Wordmark from "./Wordmark";
  * so an outlier would leave a hole above the pill.
  */
 const PHRASES = [
-  "Mandate a innovar con tu equipo",
-  "Inspirá y visualizá con tu gente",
-  "Convertí la charla en decisiones",
-  "Dibujá lo que el equipo piensa",
-  "Seguí el ritmo de la reunión",
+  "Anímate a innovar con tu equipo",
+  "Inspira y visualiza con tu gente",
+  "Convierte la charla en decisiones",
+  "Dibuja lo que el equipo piensa",
+  "Sigue el ritmo de la reunión",
 ];
 
 /**
@@ -24,9 +24,9 @@ const PHRASES = [
  */
 const TAGLINES = [
   { text: "Tus reglas, tu equipo en línea", color: "#3b2fe0" },
-  { text: "Hablás, y la pizarra se dibuja sola", color: "#b45309" },
+  { text: "Hablas, y la pizarra se dibuja sola", color: "#b45309" },
   { text: "Todo lo que se decide, queda escrito", color: "#047857" },
-  { text: "Entrás con tu nombre, sin instalar nada", color: "#be123c" },
+  { text: "Entras con tu nombre, sin instalar nada", color: "#be123c" },
   { text: "La reunión termina con el mapa hecho", color: "#0e7490" },
 ];
 

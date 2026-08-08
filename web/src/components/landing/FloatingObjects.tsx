@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import PlayfulObject from "./PlayfulObject";
 import {
   CircleShape,
   Connector,
@@ -65,48 +66,13 @@ export default function FloatingObjects() {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 overflow-hidden"
     >
-      {OBJECTS.map(
-        ({
-          id,
-          Shape,
-          color,
-          left,
-          top,
-          size,
-          opacity,
-          tx,
-          ty,
-          r,
-          dur,
-          delay,
-          wideOnly,
-        }) => (
-          <div
-            key={id}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 ${
-              wideOnly ? "hidden lg:block" : ""
-            }`}
-            style={{ left: `${left}%`, top: `${top}%` }}
-          >
-            {/* The animation rides this div, not the SVG, so it stays on the GPU. */}
-            <div
-              className="board-travel"
-              style={
-                {
-                  opacity,
-                  "--tx": tx,
-                  "--ty": ty,
-                  "--r": r,
-                  "--dur": dur,
-                  "--delay": delay,
-                } as React.CSSProperties
-              }
-            >
-              <Shape color={color} className={size} />
-            </div>
-          </div>
-        ),
-      )}
+      {OBJECTS.map(({ id, Shape, color, size, ...motion }) => (
+        // The shape stays server-rendered: it crosses into the client component
+        // as already-rendered children, not as a component reference.
+        <PlayfulObject key={id} {...motion}>
+          <Shape color={color} className={size} />
+        </PlayfulObject>
+      ))}
     </div>
   );
 }
