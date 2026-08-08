@@ -20,11 +20,11 @@ class Settings(BaseSettings):
     # yields context-free fragments that come back wrong. Wait for a real
     # end of sentence instead.
     openai_realtime_silence_ms: int = 1100
+    # No word lists here. The model treats the prompt as preceding text and
+    # will emit those words verbatim on a short or noisy segment — a list of
+    # technologies came back as "confirmamos el backend en Python?".
     openai_realtime_prompt: str = (
-        "Reunión de producto en español rioplatense sobre software. "
-        "Vocabulario frecuente: pizarra, canvas, nodo, agente, hilo, "
-        "transcripción, backend, frontend, deploy, repo, prompt, modelo, "
-        "LLM, API, React, Next.js, Python, Supabase, Vercel, hackathon."
+        "Conversación de trabajo en español rioplatense sobre software."
     )
 
     portal_secret: str = ""
