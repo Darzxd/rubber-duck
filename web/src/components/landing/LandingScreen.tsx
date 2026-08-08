@@ -1,5 +1,6 @@
 import JoinScreen from "@/components/session/JoinScreen";
 import FloatingObjects from "./FloatingObjects";
+import SwipeTagline from "./SwipeTagline";
 import TypewriterHeadline from "./TypewriterHeadline";
 import Wordmark from "./Wordmark";
 
@@ -10,6 +11,18 @@ const PHRASES = [
   "Convertí la charla en decisiones",
   "Dibujá lo que el equipo está pensando",
   "Que la pizarra siga el ritmo de la reunión",
+];
+
+/**
+ * Shorter and more concrete than the headline: between them these five still
+ * explain what the product actually does, so nothing is left unsaid.
+ */
+const TAGLINES = [
+  "Tus reglas, tu equipo en línea",
+  "Hablás, y la pizarra se dibuja sola",
+  "Todo lo que se decide, queda escrito",
+  "Entrás con tu nombre, sin instalar nada",
+  "La reunión termina con el mapa hecho",
 ];
 
 /** Present enough to read as paper, still lighter than every object on top. */
@@ -47,10 +60,7 @@ export default function LandingScreen({ onJoin }: LandingScreenProps = {}) {
       <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-2xl flex-col items-center justify-center gap-6 px-5 py-24 text-center">
         <TypewriterHeadline phrases={PHRASES} />
 
-        <p className="max-w-lg text-balance text-base leading-relaxed text-neutral-500 sm:text-lg">
-          La pizarra se llena sola mientras ustedes hablan. Entrás con tu nombre
-          y listo.
-        </p>
+        <SwipeTagline phrases={TAGLINES} />
 
         <JoinScreen onJoin={onJoin} />
       </div>

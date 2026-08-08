@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
+import { useReducedMotion } from "./useReducedMotion";
 
 type TypewriterHeadlineProps = {
   phrases: string[];
@@ -10,23 +11,6 @@ const TYPE_MS = 55;
 const DELETE_MS = 24;
 const HOLD_MS = 1900;
 
-let motionQuery: MediaQueryList | null = null;
-
-function getMotionQuery() {
-  motionQuery ??= window.matchMedia("(prefers-reduced-motion: reduce)");
-  return motionQuery;
-}
-
-function subscribeToMotion(onChange: () => void) {
-  const query = getMotionQuery();
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-const readMotion = () => getMotionQuery().matches;
-/** The server can't know the preference, so it assumes motion is fine. */
-const readMotionOnServer = () => false;
-
 export default function TypewriterHeadline({
   phrases,
 }: TypewriterHeadlineProps) {
@@ -34,12 +18,7 @@ export default function TypewriterHeadline({
   const [length, setLength] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const prefersReducedMotion = useSyncExternalStore(
-    subscribeToMotion,
-    readMotion,
-    readMotionOnServer,
-  );
-
+  const prefersReducedMotion = useReducedMotion();
   const phrase = phrases[phraseIndex];
 
   useEffect(() => {
