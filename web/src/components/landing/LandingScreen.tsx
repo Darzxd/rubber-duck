@@ -12,9 +12,15 @@ const PHRASES = [
   "Que la pizarra siga el ritmo de la reunión",
 ];
 
-/** Light enough that the drifting objects always read first. */
-const DOT_GRID =
-  "radial-gradient(circle, #e6e6ec 1.1px, transparent 1.1px)";
+/** Present enough to read as paper, still lighter than every object on top. */
+const DOT_GRID = "radial-gradient(circle, #d2d2dd 1.1px, transparent 1.1px)";
+
+/**
+ * A soft white pool under the copy. Objects now cross the whole screen, and
+ * without this they would drift straight through the headline.
+ */
+const CENTRE_GLOW =
+  "radial-gradient(ellipse 60% 46% at 50% 50%, rgba(255,255,255,0.94), rgba(255,255,255,0) 72%)";
 
 type LandingScreenProps = {
   onJoin?: (name: string) => void;
@@ -27,6 +33,12 @@ export default function LandingScreen({ onJoin }: LandingScreenProps = {}) {
       style={{ backgroundImage: DOT_GRID, backgroundSize: "24px 24px" }}
     >
       <FloatingObjects />
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-[5]"
+        style={{ backgroundImage: CENTRE_GLOW }}
+      />
 
       <header className="absolute left-5 top-5 z-20 sm:left-8 sm:top-7">
         <Wordmark />
