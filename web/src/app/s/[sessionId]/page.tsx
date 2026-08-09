@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PortalProvider } from "@portalsdk/react";
 import AgentRail from "@/components/agents/AgentRail";
 import BriefCard from "@/components/agents/BriefCard";
+import CriticPanel from "@/components/agents/CriticPanel";
 import NotetakerPanel from "@/components/agents/NotetakerPanel";
+import RepoCard from "@/components/agents/RepoCard";
 import ArchitectBoard from "@/components/agents/ArchitectBoard";
 import Whiteboard from "@/components/canvas/Whiteboard";
 import type { Author } from "@/components/canvas/authors";
@@ -63,7 +65,8 @@ function BoardView({
     sessionId,
     author: name,
   });
-  const { board, notes, brief } = useSessionStream(sessionId);
+  const { board, notes, brief, repo, criticNotes } =
+    useSessionStream(sessionId);
   const [people, setPeople] = useState<Author[]>([]);
 
   return (
@@ -83,6 +86,8 @@ function BoardView({
             void postBrief(sessionId, text);
           }}
         />
+        <RepoCard sessionId={sessionId} repo={repo} />
+        <CriticPanel notes={criticNotes} />
         <NotetakerPanel notes={notes} />
       </AgentRail>
       <PresenceLayer sessionId={sessionId} name={name} onRoster={setPeople} />

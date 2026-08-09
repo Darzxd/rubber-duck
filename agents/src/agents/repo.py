@@ -55,7 +55,8 @@ class RepoError(Exception):
     """Carries the reason the front has to act on, not a message to show."""
 
     def __init__(self, reason: str):
-        # needs_token | not_found | rate_limited | bad_url | unreachable
+        # needs_token | bad_token | not_found | rate_limited | bad_url |
+        # unreachable
         self.reason = reason
         super().__init__(reason)
 
@@ -90,7 +91,10 @@ def _raise_for(status: int, token: str) -> None:
         # can enumerate what exists. Private and missing are the same answer.
         raise RepoError("not_found" if token else "needs_token")
     if status in (401, 403):
-        raise RepoError("rate_limited" if not token else "needs_token")
+        # Somebody who already pasted a token needs to hear that the token is
+        # the problem. Asking again for the thing they just gave reads as if
+        # the app had not noticed.
+        raise RepoError("bad_token" if token else "rate_limited")
     raise RepoError("unreachable")
 
 

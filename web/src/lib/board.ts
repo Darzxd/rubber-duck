@@ -21,6 +21,29 @@ export type Note = {
   weight: number;
 };
 
+/** The team's repo once somebody connected it. The file list stays on the
+ * server: what the board needs to know is which repo, not what is in it. */
+export type ConnectedRepo = {
+  url: string;
+  owner: string;
+  name: string;
+  description: string;
+  language: string;
+  files: number;
+  private: boolean;
+};
+
+/** One finding of the Critic. `path` is the evidence, not a decoration: a note
+ * that cannot name a file the repo has never leaves the server. */
+export type CriticNote = {
+  id: string;
+  point: string;
+  about: string;
+  text: string;
+  path: string;
+  stance: "existe" | "choca";
+};
+
 const AGENTS_URL =
   process.env.NEXT_PUBLIC_AGENTS_URL ?? "http://localhost:8000";
 
@@ -73,10 +96,37 @@ function toNote(v: Record<string, unknown>): Note {
   };
 }
 
+function isCriticNote(v: unknown): v is CriticNote {
+  if (typeof v !== "object" || v === null) return false;
+  const n = v as Record<string, unknown>;
+  return (
+    typeof n.id === "string" &&
+    typeof n.text === "string" &&
+    typeof n.path === "string"
+  );
+}
+
+function toRepo(v: unknown): ConnectedRepo | null {
+  if (typeof v !== "object" || v === null) return null;
+  const r = v as Record<string, unknown>;
+  if (typeof r.owner !== "string" || typeof r.name !== "string") return null;
+  return {
+    url: typeof r.url === "string" ? r.url : "",
+    owner: r.owner,
+    name: r.name,
+    description: typeof r.description === "string" ? r.description : "",
+    language: typeof r.language === "string" ? r.language : "",
+    files: typeof r.files === "number" ? r.files : 0,
+    private: r.private === true,
+  };
+}
+
 export type SessionStream = {
   board: Board;
   notes: Note[];
   brief: string;
+  repo: ConnectedRepo | null;
+  criticNotes: CriticNote[];
 };
 
 /** One connection for every agent surface: each frame lands where it belongs. */
@@ -84,11 +134,14 @@ export function useSessionStream(sessionId: string): SessionStream {
   const [board, setBoard] = useState<Board>(EMPTY);
   const [notes, setNotes] = useState<Note[]>([]);
   const [brief, setBrief] = useState("");
+  const [repo, setRepo] = useState<ConnectedRepo | null>(null);
+  const [criticNotes, setCriticNotes] = useState<CriticNote[]>([]);
   // Frames can arrive out of order after a reconnect. An older revision would
   // undo a drawing the user already saw, so it never reaches the board. The
   // same revision may come twice: nodes first, arrows a moment later.
   const drawn = useRef(0);
   const written = useRef(0);
+  const checked = useRef(0);
 
   // Whoever opens the link late still sees the pad and the brief: the stream
   // only carries what happens from now on.
@@ -99,6 +152,10 @@ export function useSessionStream(sessionId: string): SessionStream {
       .then((data: Record<string, unknown>) => {
         if (!live) return;
         if (typeof data.brief === "string") setBrief(data.brief);
+        setRepo(toRepo(data.repo));
+        if (Array.isArray(data.criticNotes)) {
+          setCriticNotes(data.criticNotes.filter(isCriticNote));
+        }
 
         const drawing = data.board as Record<string, unknown> | undefined;
         if (
@@ -130,6 +187,7 @@ export function useSessionStream(sessionId: string): SessionStream {
   useEffect(() => {
     drawn.current = 0;
     written.current = 0;
+    checked.current = 0;
     const es = new EventSource(`${AGENTS_URL}/events/${sessionId}`);
 
     es.onmessage = (msg) => {
@@ -143,6 +201,22 @@ export function useSessionStream(sessionId: string): SessionStream {
 
       if (payload.event === "session.brief") {
         if (typeof text === "string") setBrief(text);
+        return;
+      }
+
+      if (payload.event === "session.repo") {
+        const connected = toRepo(payload.content);
+        if (connected) setRepo(connected);
+        return;
+      }
+
+      if (payload.event === "critic.notes") {
+        if (typeof revision !== "number" || revision < checked.current) return;
+        if (!Array.isArray(pad)) return;
+        checked.current = revision;
+        // The panel arrives whole every time, so this replaces rather than
+        // appends: the server already decided which findings still stand.
+        setCriticNotes(pad.filter(isCriticNote));
         return;
       }
 
@@ -165,5 +239,5 @@ export function useSessionStream(sessionId: string): SessionStream {
     return () => es.close();
   }, [sessionId]);
 
-  return { board, notes, brief };
+  return { board, notes, brief, repo, criticNotes };
 }
