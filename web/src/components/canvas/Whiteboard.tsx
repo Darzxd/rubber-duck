@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import ActionBar from "./ActionBar";
 import BoardLayer, { type CellRef } from "./BoardLayer";
 import CanvasSurface, { type CanvasApi } from "./CanvasSurface";
 import StyleBar from "./StyleBar";
@@ -532,7 +531,6 @@ export default function Whiteboard({
         onPenNibChange={handlePenNibChange}
         onUndo={board.undo}
         onRedo={board.redo}
-        onSelectAll={board.selectAll}
       />
 
       {showStyleBar ? (
@@ -552,8 +550,6 @@ export default function Whiteboard({
           onTogglePalette={setPaletteOpen}
         />
       ) : null}
-
-      <ActionBar />
 
       <ThemeSwitch isDark={isDark} onToggle={() => setIsDark((d) => !d)} />
 
