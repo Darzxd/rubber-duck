@@ -341,9 +341,25 @@ async def architect(state: GraphState) -> dict:
             continue
         if not isinstance(args, dict):
             continue
+        # borrar wipes the target, so its cursor spot has to be read now.
+        # Everything else reads its position from the op payload after apply.
+        pre_cursor = (
+            architect_board.cursor_before_borrar(board, _text(args.get("id")))
+            if call.function.name == "borrar"
+            else None
+        )
         op = _apply(board, call.function.name, args, allowed_ids)
         if not op:
             continue
+        cursor = pre_cursor or architect_board.cursor_from_op(board, op)
+        if cursor is not None:
+            # The cursor lands first so the front can slide the pointer across
+            # the pizarra before the op appears where it stopped.
+            await emit(
+                session_id,
+                "agent.cursor",
+                {"agent": "architect", "x": cursor[0], "y": cursor[1]},
+            )
         await emit(
             session_id, "architect.op", {"revision": revision, "op": op}
         )

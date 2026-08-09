@@ -116,13 +116,26 @@ function toRepo(v: unknown): ConnectedRepo | null {
   };
 }
 
+/** One agent's cursor as it moves across the pizarra. The `x/y` are in board
+ *  coordinates, so the pointer sits on the sticky it just placed. */
+export type AgentCursorState = { x: number; y: number };
+
+export type KnownAgent = "architect" | "critic";
+
 export type SessionStream = {
   board: Board;
   notes: Note[];
   brief: string;
   repo: ConnectedRepo | null;
   criticNotes: CriticNote[];
+  cursors: Partial<Record<KnownAgent, AgentCursorState>>;
 };
+
+const KNOWN_AGENTS: KnownAgent[] = ["architect", "critic"];
+// How long a cursor stays visible after the last op. Long enough for the eye
+// to catch the move, short enough that a quiet agent does not leave a ghost
+// sitting on the last sticky it touched.
+const CURSOR_TIMEOUT_MS = 3000;
 
 /** One connection for every agent surface: each frame lands where it belongs. */
 export function useSessionStream(sessionId: string): SessionStream {
@@ -135,6 +148,14 @@ export function useSessionStream(sessionId: string): SessionStream {
   // triggers React updates whenever an op lands.
   const architect = useRef<ArchitectState>(emptyState());
   const [revision, setRevision] = useState(0);
+  const [cursors, setCursors] = useState<
+    Partial<Record<KnownAgent, AgentCursorState>>
+  >({});
+  // A pending clear timer per agent, so a burst of cursor updates keeps
+  // resetting the same countdown instead of blinking off between ops.
+  const cursorTimers = useRef<
+    Partial<Record<KnownAgent, ReturnType<typeof setTimeout>>>
+  >({});
 
   const written = useRef(0);
   const checked = useRef(0);
@@ -223,6 +244,32 @@ export function useSessionStream(sessionId: string): SessionStream {
         return;
       }
 
+      if (payload.event === "agent.cursor") {
+        const c = payload.content;
+        const agent = c.agent;
+        if (
+          typeof agent !== "string" ||
+          !KNOWN_AGENTS.includes(agent as KnownAgent) ||
+          typeof c.x !== "number" ||
+          typeof c.y !== "number"
+        ) {
+          return;
+        }
+        const known = agent as KnownAgent;
+        setCursors((prev) => ({ ...prev, [known]: { x: c.x as number, y: c.y as number } }));
+        const timer = cursorTimers.current[known];
+        if (timer) clearTimeout(timer);
+        cursorTimers.current[known] = setTimeout(() => {
+          setCursors((prev) => {
+            const next = { ...prev };
+            delete next[known];
+            return next;
+          });
+          delete cursorTimers.current[known];
+        }, CURSOR_TIMEOUT_MS);
+        return;
+      }
+
       if (payload.event === "notetaker.pad") {
         if (typeof rev !== "number" || rev < written.current) return;
         if (!Array.isArray(pad)) return;
@@ -231,7 +278,15 @@ export function useSessionStream(sessionId: string): SessionStream {
       }
     };
 
-    return () => es.close();
+    return () => {
+      es.close();
+      // Drop any pending cursor-clear timers so an unmount does not schedule
+      // work into a component that no longer exists.
+      for (const t of Object.values(cursorTimers.current)) {
+        if (t) clearTimeout(t);
+      }
+      cursorTimers.current = {};
+    };
   }, [sessionId]);
 
   // Elements are derived on every render from the reducer's state. React sees
@@ -241,5 +296,5 @@ export function useSessionStream(sessionId: string): SessionStream {
     elements: deriveElements(architect.current),
   };
 
-  return { board, notes, brief, repo, criticNotes };
+  return { board, notes, brief, repo, criticNotes, cursors };
 }

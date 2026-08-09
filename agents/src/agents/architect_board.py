@@ -265,6 +265,67 @@ def titular_columna(
     }
 
 
+def _node_center(board: ArchitectBoard, id_: str) -> Optional[tuple[float, float]]:
+    node = board.nodes.get(id_)
+    if not node:
+        return None
+    x, y = node_xy(board, node.columna, node.row)
+    return (x + NOTE_W / 2, y + NOTE_H / 2)
+
+
+def cursor_before_borrar(
+    board: ArchitectBoard, id_: str
+) -> Optional[tuple[float, float]]:
+    """Where the cursor should hover just before a borrar wipes the target.
+
+    Once the op has landed the element is gone and there is nowhere left to
+    point at; this reads the board while the target is still there."""
+    if id_ in board.nodes:
+        return _node_center(board, id_)
+    if id_ in board.annotations:
+        ann = board.annotations[id_]
+        node = board.nodes.get(ann.nodo_id)
+        if not node:
+            return None
+        nx, ny = node_xy(board, node.columna, node.row)
+        x, y = annotation_xy(nx, ny, ann.slot)
+        return (x + 20, y + 20)
+    if id_ in board.arrows:
+        ar = board.arrows[id_]
+        source = board.nodes.get(ar.de)
+        target = board.nodes.get(ar.a)
+        if not source or not target:
+            return None
+        x1, y1, x2, y2 = _arrow_points(board, source, target)
+        return ((x1 + x2) / 2, (y1 + y2) / 2)
+    return None
+
+
+def cursor_from_op(
+    board: ArchitectBoard, op: dict
+) -> Optional[tuple[float, float]]:
+    """Where the cursor lands for an op whose target is still in the board.
+
+    Coordinates come straight from the op payload where the tool call carried
+    them, or from the board state where it did not (editar_nodo does not move
+    the node, so the position is what the board already knows)."""
+    kind = op.get("type")
+    if kind in ("crear_nodo", "mover_nodo"):
+        return (float(op["x"]) + NOTE_W / 2, float(op["y"]) + NOTE_H / 2)
+    if kind == "conectar":
+        return (
+            (float(op["x1"]) + float(op["x2"])) / 2,
+            (float(op["y1"]) + float(op["y2"])) / 2,
+        )
+    if kind == "pegar_nota":
+        return (float(op["x"]) + 20, float(op["y"]) + 20)
+    if kind == "titular_columna":
+        return (float(op["x"]), float(op["y"]))
+    if kind == "editar_nodo":
+        return _node_center(board, op["id"])
+    return None
+
+
 def snapshot(board: ArchitectBoard) -> dict:
     """The structured board as JSON, for a browser opening the session late.
     Every field the frontend reducer would have built up from ops, minus the

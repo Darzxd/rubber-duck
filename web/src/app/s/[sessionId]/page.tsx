@@ -76,7 +76,7 @@ function BoardView({
     author: name,
     enabled: !ended,
   });
-  const { board, notes, brief, repo, criticNotes } =
+  const { board, notes, brief, repo, criticNotes, cursors } =
     useSessionStream(sessionId);
   const [people, setPeople] = useState<Author[]>([]);
 
@@ -90,7 +90,7 @@ function BoardView({
         onEndSession={onEndSession}
         ended={ended}
       >
-        <ArchitectBoard board={board} />
+        <ArchitectBoard board={board} cursors={cursors} />
       </Whiteboard>
       <AgentRail>
         <BriefCard
