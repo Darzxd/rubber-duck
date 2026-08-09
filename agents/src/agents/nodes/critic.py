@@ -1,13 +1,22 @@
+import asyncio
 import json
 import logging
 import time
 
 from openai import AsyncOpenAI
 
+from agents import architect_board
 from agents import organizer_store as store
 from agents.bus import emit
 from agents.settings import get_settings
 from agents.state import GraphState, Point
+
+# The pause between consecutive annotations landing on the pizarra, so the
+# room can see the Critic move one sticky at a time rather than as a burst.
+OP_INTERVAL_SEC = 0.15
+# How wide an annotation reads before it stops looking like a note. Enough to
+# say what was found and name the file inline.
+ANNOTATION_MAX_WORDS = 12
 
 logger = logging.getLogger("agents.critic")
 
@@ -126,11 +135,28 @@ def _read(data: dict, points: list[Point], files: set[str]) -> list[dict]:
     return notes
 
 
+def _shorten(text: str, limit: int) -> str:
+    words = text.split()
+    if len(words) <= limit:
+        return text
+    return " ".join(words[:limit])
+
+
+def _annotation_text(text: str, path: str) -> str:
+    """The line that lands on the pizarra: the finding, and the file that
+    backs it named inline. Trimmed so it reads as a sticky, not a paragraph."""
+    filename = path.rsplit("/", 1)[-1]
+    body = text.rstrip(".")
+    return _shorten(f"{body} ({filename})", ANNOTATION_MAX_WORDS)
+
+
 async def critic(state: GraphState) -> dict:
     session_id = state["session_id"]
     revision = state["digest"]["revision"]
     points = state["routes"]["critic"]
-    index = store.get(session_id).repo
+    session = store.get(session_id)
+    index = session.repo
+    board = session.architect_board
 
     # Without a repo there is no evidence to find, and a critic with no
     # evidence has nothing to say. It stays quiet instead of guessing.
@@ -191,7 +217,45 @@ async def critic(state: GraphState) -> dict:
     if not notes:
         return {}
 
-    # The whole panel, not the delta: the front should never have to merge.
+    # Land each finding as a yellow annotation on the pizarra, but only for
+    # points the Architect actually placed as a node. A finding about a point
+    # that never made it to the board has nowhere to attach and stays silent;
+    # if the point survives, the next revision will catch it.
+    landed = 0
+    for note in notes:
+        if note["point"] not in board.nodes:
+            continue
+        op = architect_board.pegar_nota(
+            board,
+            note["point"],
+            _annotation_text(note["text"], note["path"]),
+            "Critic",
+        )
+        if not op:
+            continue
+        cursor = architect_board.cursor_from_op(board, op)
+        if cursor is not None:
+            await emit(
+                session_id,
+                "agent.cursor",
+                {"agent": "critic", "x": cursor[0], "y": cursor[1]},
+            )
+        await emit(
+            session_id, "architect.op", {"revision": revision, "op": op}
+        )
+        landed += 1
+        await asyncio.sleep(OP_INTERVAL_SEC)
+
+    # Refresh the /digest bootstrap snapshot so a late joiner reads the
+    # annotations the Critic just landed.
+    if landed:
+        store.set_board(
+            session_id, revision, architect_board.to_elements(board)
+        )
+
+    # The legacy critic.notes panel is still fed while step 7 has not yet
+    # removed it — that way the panel and the pizarra agree during the
+    # transition and neither disappears mid-session.
     everything = store.add_critic_notes(session_id, revision, notes)
     await emit(session_id, "critic.notes", {"revision": revision, "notes": everything})
     return {}
