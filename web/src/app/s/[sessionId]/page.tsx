@@ -81,6 +81,7 @@ function BoardView({
   return (
     <>
       <Whiteboard
+        sessionId={sessionId}
         sessionName={`Pizarra ${sessionId}`}
         authors={people}
         onShare={onOpenShareModal}

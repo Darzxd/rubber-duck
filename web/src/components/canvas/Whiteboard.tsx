@@ -27,6 +27,7 @@ import { SAMPLE_AGENTS } from "./panelData";
 import { useBoardElements } from "./useBoardElements";
 
 type WhiteboardProps = {
+  sessionId: string;
   sessionName: string;
   authors?: Author[];
   onShare?: () => void;
@@ -66,6 +67,7 @@ function normalise(box: { x: number; y: number; w: number; h: number }) {
 }
 
 export default function Whiteboard({
+  sessionId,
   sessionName,
   // Empty until the session layer passes real participants.
   authors = [],
@@ -92,7 +94,7 @@ export default function Whiteboard({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<CellRef | null>(null);
 
-  const board = useBoardElements();
+  const board = useBoardElements(sessionId);
   const canvasApi = useRef<CanvasApi | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const origin = useRef<Point>({ x: 0, y: 0 });
