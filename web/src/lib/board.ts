@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { BoardElement } from "@/components/canvas/boardElements";
 import {
@@ -85,10 +85,9 @@ const CURSOR_TIMEOUT_MS = 3000;
 export function useSessionStream(sessionId: string): SessionStream {
   const [brief, setBrief] = useState("");
   const [repo, setRepo] = useState<ConnectedRepo | null>(null);
-  // The Architect's board is kept as its structured state and derived to
-  // elements on render — a single mutable reducer plus a version counter that
-  // triggers React updates whenever an op lands.
-  const architect = useRef<ArchitectState>(emptyState());
+  // The Architect's board is kept as structured state and derived to render
+  // primitives via useMemo, so a cursor tick does not redo the element list.
+  const [architect, setArchitect] = useState<ArchitectState>(emptyState);
   const [revision, setRevision] = useState(0);
   const [cursors, setCursors] = useState<
     Partial<Record<KnownAgent, AgentCursorState>>
@@ -114,7 +113,7 @@ export function useSessionStream(sessionId: string): SessionStream {
         // that arrive after this reflect changes since it was taken.
         const snapshot = data.architectBoard;
         if (isSnapshot(snapshot)) {
-          architect.current = fromSnapshot(snapshot);
+          setArchitect(fromSnapshot(snapshot));
           const digest = data.digest as Record<string, unknown> | undefined;
           const rev =
             digest && typeof digest.revision === "number" ? digest.revision : 0;
@@ -153,11 +152,8 @@ export function useSessionStream(sessionId: string): SessionStream {
       if (payload.event === "architect.op") {
         const op = payload.content.op;
         if (!isArchitectOp(op)) return;
-        architect.current = applyOp(architect.current, op);
-        // Bump the revision so React re-renders. Using the op's revision when
-        // present keeps the counter in sync with the backend, but any change
-        // will do here — the state itself is the source of truth.
-        setRevision((prev) => (typeof rev === "number" ? rev : prev + 1));
+        setArchitect((prev) => applyOp(prev, op));
+        if (typeof rev === "number") setRevision(rev);
         return;
       }
 
@@ -201,12 +197,12 @@ export function useSessionStream(sessionId: string): SessionStream {
     };
   }, [sessionId]);
 
-  // Elements are derived on every render from the reducer's state. React sees
-  // a fresh array whenever the revision moves, which is when an op landed.
-  const board: Board = {
-    revision,
-    elements: deriveElements(architect.current),
-  };
+  // Only re-derive the primitive list when the architect state itself moves;
+  // a cursor blink should not spend the work of rebuilding the board.
+  const board: Board = useMemo(
+    () => ({ revision, elements: deriveElements(architect) }),
+    [architect, revision],
+  );
 
   return { board, brief, repo, cursors };
 }
