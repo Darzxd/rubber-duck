@@ -10,6 +10,11 @@ export type BoardOp =
   | { k: "u"; els: BoardElement[] }
   | { k: "d"; ids: string[] };
 
+/** Stamped on every op so a browser can tell its own echo apart. Portal's own
+ * sender id cannot do this job: two tabs of one profile share the anonymous
+ * token, so they arrive as the same user and each would ignore the other. */
+type Sourced = BoardOp & { src: string };
+
 // Portal caps a payload at 2KB. A long pen stroke is thinned until it fits
 // rather than dropped: a slightly coarser curve beats a missing one.
 const MAX_BYTES = 1900;
@@ -49,9 +54,10 @@ function fit(op: BoardOp): BoardOp | null {
   return null;
 }
 
-function isOp(v: unknown): v is BoardOp {
+function isSourced(v: unknown): v is Sourced {
   if (typeof v !== "object" || v === null) return false;
   const op = v as Record<string, unknown>;
+  if (typeof op.src !== "string") return false;
   if (op.k === "u") return Array.isArray(op.els);
   if (op.k === "d") return Array.isArray(op.ids);
   return false;
@@ -70,10 +76,13 @@ export function useBoardSync(
   sessionId: string,
   onRemote: (op: BoardOp) => void,
 ) {
-  const { send, messages, me } = useChannel<BoardOp>({
+  const { send, messages } = useChannel<Sourced>({
     channelId: `draw:${sessionId}`,
     history: 200,
   });
+
+  // One per mounted board, so every tab is distinct even when they share a login.
+  const src = useRef(Math.random().toString(36).slice(2));
 
   const applied = useRef(new Set<string>());
   // Held in a ref so a new handler identity does not replay the whole channel.
@@ -86,10 +95,11 @@ export function useBoardSync(
       applied.current.add(message.id);
       // Own strokes are already on the board; re-applying them would fight
       // with whatever is being dragged right now.
-      if (me && message.sender.id === me.id) continue;
-      if (isOp(message.content)) handler.current(message.content);
+      if (!isSourced(message.content)) continue;
+      if (message.content.src === src.current) continue;
+      handler.current(message.content);
     }
-  }, [messages, me]);
+  }, [messages]);
 
   return useCallback(
     (op: BoardOp) => {
@@ -97,7 +107,7 @@ export function useBoardSync(
       if (op.k === "d" && op.ids.length === 0) return;
       const payload = fit(op);
       if (!payload) return;
-      void send({ content: payload }).catch(() => {});
+      void send({ content: { ...payload, src: src.current } }).catch(() => {});
     },
     [send],
   );
