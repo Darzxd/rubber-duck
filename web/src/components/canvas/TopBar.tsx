@@ -1,12 +1,6 @@
 import AvatarStack from "./AvatarStack";
 import type { Author } from "./authors";
-import {
-  ChevronDown,
-  LinkIcon,
-  LogoMark,
-  MoreVertical,
-  SparkleIcon,
-} from "./icons";
+import { ChevronDown, LinkIcon, LogoMark, SparkleIcon } from "./icons";
 
 type TopBarProps = {
   sessionName: string;
@@ -14,6 +8,9 @@ type TopBarProps = {
   /** How many agents are currently working, shown in the centre pill. */
   workingAgents?: number;
   onShare?: () => void;
+  /** Only whoever opened the session gets to close it. */
+  canEnd?: boolean;
+  onEndSession?: () => void;
 };
 
 export default function TopBar({
@@ -21,6 +18,8 @@ export default function TopBar({
   authors,
   workingAgents = 0,
   onShare,
+  canEnd = false,
+  onEndSession,
 }: TopBarProps) {
   return (
     <header className="relative z-30 flex items-center gap-3 border-b border-neutral-200 bg-white px-3 py-2.5 sm:px-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -77,13 +76,15 @@ export default function TopBar({
           <span className="hidden sm:inline">Compartir</span>
         </button>
 
-        <button
-          type="button"
-          aria-label="Más opciones"
-          className="grid size-8 place-items-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white"
-        >
-          <MoreVertical />
-        </button>
+        {canEnd ? (
+          <button
+            type="button"
+            onClick={onEndSession}
+            className="rounded-full border border-neutral-200 px-3.5 py-1.5 text-sm font-semibold text-neutral-700 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-red-900 dark:hover:bg-red-950 dark:hover:text-red-400"
+          >
+            Finalizar
+          </button>
+        ) : null}
       </div>
     </header>
   );

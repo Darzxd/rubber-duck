@@ -30,6 +30,8 @@ type WhiteboardProps = {
   sessionName: string;
   authors?: Author[];
   onShare?: () => void;
+  canEnd?: boolean;
+  onEndSession?: () => void;
   children?: ReactNode;
 };
 
@@ -67,6 +69,8 @@ export default function Whiteboard({
   // Empty until the session layer passes real participants.
   authors = [],
   onShare,
+  canEnd,
+  onEndSession,
   children,
 }: WhiteboardProps) {
   const [activeTool, setActiveTool] = useState<ToolId>("select");
@@ -574,6 +578,8 @@ export default function Whiteboard({
           authors={authors}
           workingAgents={SAMPLE_AGENTS.length}
           onShare={onShare}
+          canEnd={canEnd}
+          onEndSession={onEndSession}
         />
 
         <div className="flex flex-1 overflow-hidden">

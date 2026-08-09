@@ -11,6 +11,8 @@ import {
 export type SessionArgs = {
   sessionId: string;
   author: string;
+  /** Turning this off tears the microphone down; a closed session stops here. */
+  enabled?: boolean;
 };
 
 export type Chunk = {
@@ -28,7 +30,11 @@ export type SessionState = {
   error: string | null;
 };
 
-export function useSession({ sessionId, author }: SessionArgs): SessionState {
+export function useSession({
+  sessionId,
+  author,
+  enabled = true,
+}: SessionArgs): SessionState {
   const [supported] = useState(true);
   const [recording, setRecording] = useState(false);
   const [interim, setInterim] = useState("");
@@ -37,6 +43,8 @@ export function useSession({ sessionId, author }: SessionArgs): SessionState {
   const seqRef = useRef(0);
 
   useEffect(() => {
+    if (!enabled) return;
+
     let cancelled = false;
     let stream: MediaStream | null = null;
     let controller: RealtimeController | null = null;
@@ -99,7 +107,7 @@ export function useSession({ sessionId, author }: SessionArgs): SessionState {
       stream?.getTracks().forEach((t) => t.stop());
       setRecording(false);
     };
-  }, [sessionId, author]);
+  }, [sessionId, author, enabled]);
 
   return { supported, recording, interim, chunks, error };
 }
