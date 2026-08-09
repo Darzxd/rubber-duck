@@ -69,12 +69,15 @@ export type KnownAgent = "architect" | "critic";
 
 /** One side-panel note. It is what the Architect or Critic wanted to add as
  *  context to something already visible on the pizarra — not a repeat of what
- *  someone said, and not big enough to be a sticky. */
+ *  someone said, and not big enough to be a sticky. `nodeText` is what the
+ *  node it belongs to reads, so the rail can group notes under the sticky
+ *  they refer to instead of listing them flat and disconnected. */
 export type SideNote = {
   id: string;
   text: string;
   source: KnownAgent;
   nodeId: string;
+  nodeText: string;
 };
 
 export type SessionStream = {
@@ -129,14 +132,21 @@ export function useSessionStream(sessionId: string): SessionStream {
         const snapshot = data.architectBoard;
         if (isSnapshot(snapshot)) {
           setArchitect(fromSnapshot(snapshot));
+          // Bootstrap: only keep annotations whose node is still on the
+          // board. An orphan note in the rail with no sticky to point at
+          // reads as random text and is exactly the disconnection to avoid.
+          const nodesById = new Map(
+            snapshot.nodes.map((n) => [n.id, n.texto]),
+          );
           setNotes(
             snapshot.annotations
-              .filter((a) => a.nodo_id)
+              .filter((a) => nodesById.has(a.nodo_id))
               .map((a) => ({
                 id: a.id,
                 text: a.texto,
                 source: (a.autor === "Critic" ? "critic" : "architect") as KnownAgent,
                 nodeId: a.nodo_id,
+                nodeText: nodesById.get(a.nodo_id) ?? "",
               })),
           );
           const digest = data.digest as Record<string, unknown> | undefined;
@@ -180,6 +190,10 @@ export function useSessionStream(sessionId: string): SessionStream {
         if (op.type === "pegar_nota") {
           const source: KnownAgent =
             op.autor === "Critic" ? "critic" : "architect";
+          const target = architect.nodes.get(op.nodo_id);
+          // A note whose node is not on the pizarra has nothing to be about;
+          // drop it silently rather than let the rail collect ghosts.
+          if (!target) return;
           setNotes((prev) => {
             const without = prev.filter((n) => n.id !== op.id);
             const next: SideNote = {
@@ -187,6 +201,7 @@ export function useSessionStream(sessionId: string): SessionStream {
               text: op.texto,
               source,
               nodeId: op.nodo_id,
+              nodeText: target.texto,
             };
             return [next, ...without].slice(0, MAX_NOTES);
           });
