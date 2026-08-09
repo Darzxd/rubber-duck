@@ -1,3 +1,5 @@
+import { Graph, layout } from "@dagrejs/dagre";
+
 import type { BoardElement } from "@/components/canvas/boardElements";
 import type { StickyTone } from "@/components/canvas/StickyNote";
 
@@ -106,6 +108,60 @@ const STYLE: Record<
 };
 
 const INK = "#525252";
+
+// Sticky size. Kept in sync with backend NOTE_W/NOTE_H so an op that carries
+// pixel coords still lines up when dagre relaxes into similar positions.
+const NOTE_W = 160;
+const NOTE_H = 110;
+// Where the flow starts on the canvas. Leaves the tool rail on the left with
+// clear space, and pushes the diagram below the TopBar.
+const ORIGIN_X = 210;
+const ORIGIN_Y = 104;
+// Room between ranks and between nodes in a rank. Wide enough that arrow
+// labels can sit between two nodes without landing on one.
+const RANK_SEP = 90;
+const NODE_SEP = 46;
+
+/** Runs dagre over the current architect graph and returns each node's
+ *  top-left position, in board pixels. Left-to-right flow, so the room reads
+ *  the pizarra the way a diagram reads: start on the left, arrows to the
+ *  right. Called on every state change through deriveElements. */
+function layoutFlow(state: ArchitectState): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  if (state.nodes.size === 0) return positions;
+
+  const g = new Graph({ multigraph: false, compound: false });
+  g.setGraph({
+    rankdir: "LR",
+    ranksep: RANK_SEP,
+    nodesep: NODE_SEP,
+    marginx: 20,
+    marginy: 20,
+  });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  for (const id of state.nodes.keys()) {
+    g.setNode(id, { width: NOTE_W, height: NOTE_H });
+  }
+  for (const arrow of state.arrows.values()) {
+    if (state.nodes.has(arrow.de) && state.nodes.has(arrow.a)) {
+      g.setEdge(arrow.de, arrow.a);
+    }
+  }
+
+  layout(g);
+
+  for (const id of state.nodes.keys()) {
+    const laid = g.node(id);
+    if (!laid) continue;
+    // Dagre gives centre coordinates; the renderer wants top-left.
+    positions.set(id, {
+      x: ORIGIN_X + laid.x - NOTE_W / 2,
+      y: ORIGIN_Y + laid.y - NOTE_H / 2,
+    });
+  }
+  return positions;
+}
 
 function copy(state: ArchitectState): ArchitectState {
   return {
@@ -257,7 +313,10 @@ export function fromSnapshot(snapshot: ArchitectSnapshot): ArchitectState {
   return state;
 }
 
-/** Turns the structured board into the flat elements the BoardLayer renders. */
+/** Turns the structured board into the flat elements the BoardLayer renders.
+ *  Runs a left-to-right dagre layout on the graph so a change to any node or
+ *  arrow reflows the diagram — the wire coords the backend sent are ignored
+ *  here in favour of a layout that keeps the flow readable as it grows. */
 export function deriveElements(state: ArchitectState): BoardElement[] {
   const els: BoardElement[] = [];
   const base = {
@@ -268,27 +327,18 @@ export function deriveElements(state: ArchitectState): BoardElement[] {
     cap: "round" as const,
   };
 
-  for (const [columna, t] of state.titles) {
-    els.push({
-      ...base,
-      id: `ft${columna}`,
-      color: INK,
-      kind: "text",
-      x: t.x,
-      y: t.y,
-      text: t.titulo,
-    });
-  }
+  const positions = layoutFlow(state);
 
   for (const [id, node] of state.nodes) {
     const style = STYLE[node.kind];
+    const pos = positions.get(id) ?? { x: node.x, y: node.y };
     els.push({
       ...base,
       id: `n${id}`,
       color: style.colour,
       kind: "note",
-      x: node.x,
-      y: node.y,
+      x: pos.x,
+      y: pos.y,
       text: node.texto,
       tag: style.tag,
       tone: style.tone,
@@ -296,15 +346,24 @@ export function deriveElements(state: ArchitectState): BoardElement[] {
   }
 
   for (const [id, arrow] of state.arrows) {
+    const source = positions.get(arrow.de);
+    const target = positions.get(arrow.a);
+    if (!source || !target) continue;
+    // Left-to-right routing: right edge of source, left edge of target. Any
+    // rank difference dagre laid out is handled by the diagonal itself.
+    const x1 = source.x + NOTE_W;
+    const y1 = source.y + NOTE_H / 2;
+    const x2 = target.x;
+    const y2 = target.y + NOTE_H / 2;
     els.push({
       ...base,
       id,
       color: INK,
       kind: "arrow",
-      x1: arrow.x1,
-      y1: arrow.y1,
-      x2: arrow.x2,
-      y2: arrow.y2,
+      x1,
+      y1,
+      x2,
+      y2,
     });
     if (arrow.label) {
       els.push({
@@ -312,8 +371,8 @@ export function deriveElements(state: ArchitectState): BoardElement[] {
         id: `al${id}`,
         color: INK,
         kind: "text",
-        x: (arrow.x1 + arrow.x2) / 2 - 40,
-        y: (arrow.y1 + arrow.y2) / 2 - 20,
+        x: (x1 + x2) / 2 - 40,
+        y: (y1 + y2) / 2 - 20,
         text: arrow.label,
       });
     }
