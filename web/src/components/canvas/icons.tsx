@@ -40,11 +40,17 @@ function Glyph({
   className = BASE,
   at = "1.4 1.4",
   cap = true,
+  spin,
+  flip,
 }: {
   d: string;
   className?: string;
   at?: string;
   cap?: boolean;
+  /** Degrees about the centre of the box, for glyphs the set ships upright. */
+  spin?: number;
+  /** Mirrors across the vertical centre line. */
+  flip?: boolean;
 }) {
   return (
     <svg
@@ -57,7 +63,12 @@ function Glyph({
       strokeLinecap={cap ? "round" : "butt"}
       strokeLinejoin="round"
     >
-      <path d={d} transform={`translate(${at})`} />
+      <path
+        d={d}
+        transform={`${flip ? "translate(24 0) scale(-1 1) " : ""}${
+          spin ? `rotate(${spin} 12 12) ` : ""
+        }translate(${at})`}
+      />
     </svg>
   );
 }
@@ -158,6 +169,7 @@ export const SelectIcon = ({ className }: IconProps) => (
   <Glyph
     d="M17.1231 19.9657L19.9657 17.1231C20.2797 16.8091 20.2797 16.3 19.9657 15.986L15.4841 11.5044C15.1453 11.1655 15.1762 10.6074 15.5504 10.308L19.318 7.29393C19.8279 6.88597 19.6645 6.0724 19.0366 5.89299L2.02712 1.03315C1.4206 0.859854 0.859854 1.4206 1.03315 2.02712L5.89299 19.0366C6.0724 19.6645 6.88597 19.8279 7.29393 19.318L10.308 15.5504C10.6074 15.1762 11.1655 15.1453 11.5044 15.4841L15.986 19.9657C16.3 20.2797 16.8091 20.2797 17.1231 19.9657Z"
     className={className}
+    flip
   />
 );
 
@@ -191,8 +203,15 @@ export const ImageIcon = ({ className }: IconProps) => (
   />
 );
 
+// The set ships this one pointing right and turns it in the frame, so the
+// rotation stays here rather than in a second copy of the path.
 export const ArrowToolIcon = ({ className }: IconProps) => (
-  <Line d="M5 19 19 5M19 5h-6.4M19 5v6.4" className={className} />
+  <Glyph
+    d="M9.05974 12.9661L15 7.02587L8.97395 1M15 7.02587L1 7.02587"
+    className={className}
+    at="4 5.017"
+    spin={-45}
+  />
 );
 
 export const NoteIcon = ({ className }: IconProps) => (
