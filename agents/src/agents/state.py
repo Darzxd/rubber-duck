@@ -76,3 +76,90 @@ class GraphState(TypedDict):
     # What the Orchestrator decided each agent should work on. An agent reads
     # its own slice, never the whole summary.
     routes: dict[str, list[Point]]
+
+
+# --- Architect ops. The tools the Architect calls end up here on the wire.
+# Kept in lockstep with shared/protocol.ts on the TypeScript side.
+
+NodeKind = Literal["idea", "decision", "tarea", "duda"]
+KnownAgent = Literal["architect", "critic"]
+
+
+class OpCrearNodo(TypedDict):
+    type: Literal["crear_nodo"]
+    id: str
+    texto: str
+    columna: int
+    kind: NodeKind
+    x: float
+    y: float
+
+
+class OpEditarNodo(TypedDict):
+    type: Literal["editar_nodo"]
+    id: str
+    texto: str
+
+
+class OpMoverNodo(TypedDict):
+    type: Literal["mover_nodo"]
+    id: str
+    columna: int
+    x: float
+    y: float
+
+
+class OpConectar(TypedDict, total=False):
+    # Required plus one optional field, so total=False and required keys are
+    # enforced by the emitter rather than the type. The alternative is
+    # NotRequired, which needs typing_extensions on older readers.
+    type: Literal["conectar"]
+    id: str
+    de: str
+    a: str
+    label: str
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+
+
+class OpPegarNota(TypedDict, total=False):
+    type: Literal["pegar_nota"]
+    id: str
+    nodo_id: str
+    texto: str
+    autor: str
+    x: float
+    y: float
+
+
+class OpBorrar(TypedDict):
+    type: Literal["borrar"]
+    id: str
+
+
+class OpTitularColumna(TypedDict):
+    type: Literal["titular_columna"]
+    columna: int
+    titulo: str
+    x: float
+    y: float
+
+
+ArchitectOp = (
+    OpCrearNodo
+    | OpEditarNodo
+    | OpMoverNodo
+    | OpConectar
+    | OpPegarNota
+    | OpBorrar
+    | OpTitularColumna
+)
+
+
+class AgentCursor(TypedDict, total=False):
+    agent: KnownAgent
+    x: float
+    y: float
+    action: Literal["writing", "moving", "connecting", "annotating", "erasing"]
