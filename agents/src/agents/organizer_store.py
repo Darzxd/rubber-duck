@@ -1,6 +1,7 @@
 import time
 from dataclasses import dataclass, field
 
+from agents.architect_board import ArchitectBoard
 from agents.state import Digest, Notepad, TranscriptChunk
 
 # How much speech the Organizer gets to look at. Enough to keep the thread of
@@ -41,6 +42,10 @@ class SessionState:
     # drawn gets an empty canvas otherwise: the stream only carries what
     # happens from the moment somebody is listening.
     board: dict = field(default_factory=empty_board)
+    # The Architect's structured view of the board — nodes, annotations and
+    # arrows keyed by id. The `board` field above is a flat snapshot of this,
+    # kept in sync so late-joiners have something to render straight away.
+    architect_board: ArchitectBoard = field(default_factory=ArchitectBoard)
     # The team's repo, read once when somebody connects it. It is context for
     # understanding what is being said — never a source of what gets drawn.
     repo: dict | None = None

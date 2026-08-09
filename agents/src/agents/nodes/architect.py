@@ -1,232 +1,368 @@
+import asyncio
 import json
 import logging
 import time
 
 from openai import AsyncOpenAI
 
-from agents import canvas
+from agents import architect_board, repo
 from agents import organizer_store as store
-from agents import repo
 from agents.bus import emit
 from agents.settings import get_settings
-from agents.state import GraphState, Point
+from agents.state import GraphState
 
 logger = logging.getLogger("agents.architect")
 
-MAX_GROUPS = 4
-MAX_PER_GROUP = 5
-MAX_WORDS = 4
-
-SYSTEM_PROMPT = """Sos el Architect de una pizarra que se llena sola mientras un equipo habla. Recibís las ideas que se dijeron, cada una con su id, y armás el esquema: qué va con qué, y cómo se relacionan.
-
-No dibujás. Decidís la estructura. Las coordenadas las pone otro.
-
-QUÉ RECIBÍS:
-- `contexto`: el resumen vivo de la conversación.
-- `ideas`: lo que se dijo, cada una con su `id`. Son las únicas que podés poner en la pizarra.
-- `repo`: a veces, cómo está armado el proyecto del equipo. Te sirve para agrupar: si dos ideas caen en la misma parte del sistema, van juntas. Nada más. No es una idea, no va a la pizarra, no lo menciones en ningún título.
-
-CÓMO ARMÁS EL ESQUEMA:
-- Agrupá las ideas por tema. Un grupo es una columna de la pizarra.
-- Máximo 4 grupos. Máximo 5 notas por grupo.
-- Cada nota es UNA idea, nombrada por su `id`. No juntes dos ideas en una nota, no partas una en dos.
-- Si todo lo que hay es del mismo tema, un solo grupo es la respuesta correcta.
-
-CÓMO ESCRIBÍS UNA NOTA:
-- `texto`: de 1 a 4 palabras. Es el título de la idea, no la idea entera. "Usar Stripe", "Límite plan gratis", "Registrar dominio".
-- Nunca una frase. Nunca un verbo conjugado largo. Si no entra en 4 palabras, elegí las 4 que importan.
-- Si una decisión y lo que la causó son dos ideas distintas, son dos notas distintas.
-
-FLECHAS:
-- Conectá dos notas solo si la relación se dijo o se desprende directo de cómo se dijo: una lleva a la otra, una depende de la otra, una se opone a la otra, una es la causa de la otra.
-- Que dos ideas aparezcan en la misma charla NO es una relación. Dos flechas ciertas valen más que diez inventadas. `flechas` vacío es una respuesta correcta.
-- `texto` de la flecha: 1 o 2 palabras, o vacío.
-
-REGLA DURA — NO INVENTAR:
-- Toda nota es una idea de la lista, nombrada por su id. No agregues ideas, tecnologías ni nombres que no aparecieron.
-- El título del grupo y el título general sí los escribís vos, pero describen lo que hay, no lo que falta.
-
-Formato de salida (JSON, sin prosa alrededor):
-{
-  "titulo": "2 a 4 palabras",
-  "grupos": [
-    {"titulo": "1 a 3 palabras", "notas": [{"idea": "id_de_la_idea", "texto": "1 a 4 palabras"}]}
-  ],
-  "flechas": [{"de": "id_origen", "a": "id_destino", "texto": "necesita"}]
-}"""
-
-
-# Cutting a title at the word limit can leave it hanging on a connector, which
-# reads as a bug rather than as a short title.
-DANGLING = {"y", "e", "o", "u", "de", "del", "en", "para", "con", "a", "la", "el"}
-
-
-def _words(v, limit: int) -> str:
-    if not isinstance(v, str):
-        return ""
-    words = v.split()[:limit]
-    while words and words[-1].lower() in DANGLING:
-        words.pop()
-    return " ".join(words)
-
-
-# What a note says it is comes from the Organizer, which already decided it
-# while writing the summary. Asked to label it again the Architect calls
-# everything an idea, and it has no more evidence than the Organizer had.
-KIND_STYLE = {
+# What the Organizer's kinds turn into on the board. Everything the Architect
+# writes is one of these four flavours.
+KIND_STYLE: dict[str, str] = {
     "decision": "decision",
     "idea": "idea",
     "pendiente": "tarea",
     "pregunta": "duda",
 }
 
+# The pause between consecutive ops going out on the wire. Long enough that
+# the front can animate a cursor moving from one spot to the next; short
+# enough that a 5-op turn does not feel like the agent is stalling.
+OP_INTERVAL_SEC = 0.15
 
-def _fallback(point: Point) -> canvas.PlannedNote:
-    """A note for an idea the model left out, written without adding anything.
 
-    The board is replaced whole on every revision, so an idea silently dropped
-    is an idea that disappears off the screen while somebody is reading it."""
+SYSTEM_PROMPT = """Sos el Architect de una pizarra que se llena mientras un equipo de producto habla.
+
+Trabajás como un humano: no volcás todo lo que se dice. Elegís lo que vale y armás la estructura de a poco. Cada revisión hacés MUY POCO — una o dos cosas, o nada.
+
+QUÉ RECIBÍS:
+- `contexto`: el resumen vivo de la conversación.
+- `reunion`: para qué se juntó el equipo. Es la vara: lo que no es sobre eso, no va.
+- `ideas`: las cosas que el Organizer marcó como valiosas. Cada una trae su `id`, `text`, `kind` y `en_pizarra` (true si ya tiene nodo en la pizarra).
+- `pizarra_actual`: lo que ya está dibujado — nodos con su id/columna/kind, columnas tituladas, flechas. NO redibujes lo que ya está bien.
+- `repo`: a veces, cómo está armado el proyecto del equipo. Usalo para NOMBRAR: si un nodo corresponde a un módulo o archivo del repo, usá ese nombre exacto (`editar_nodo` a un nodo existente, o `crear_nodo` con el nombre real). No es fuente de ideas — nada del repo entra si nadie lo dijo.
+
+CÓMO DECIDÍS QUÉ HACER:
+- Una idea con `en_pizarra: true` ya está. NO la vuelvas a crear.
+- Una idea nueva se sube al board solo si vale la pena — un detalle que nadie retomó puede quedarse afuera. Si dudás, no la agregues; volverá si el equipo insiste.
+- Un nodo del board cuya idea ya no tiene sentido (contradicha, obsoleta) se `borrar`.
+- Una relación se `conectar` SOLO si el equipo la dijo — dos ideas mencionadas juntas no son una relación.
+- Un detalle específico dicho de un nodo va como `pegar_nota` al lado. Máximo una anotación por revisión.
+- Una columna se `titular_columna` cuando ya tiene ≥2 nodos del mismo tema.
+
+TUS HERRAMIENTAS (llamalas con function calling — no escribas JSON en el texto):
+- `crear_nodo(id, texto, columna, kind)` — el `id` DEBE ser uno de `ideas`. Columna 0 a 3.
+- `editar_nodo(id, texto)` — para renombrar un nodo existente (típicamente con el nombre del repo).
+- `mover_nodo(id, columna)` — reubicar un nodo entre columnas.
+- `conectar(de, a, label?)` — flecha entre dos nodos existentes. Label 1-2 palabras o vacío.
+- `pegar_nota(nodo_id, texto, autor?)` — nota amarilla de detalle pegada al nodo.
+- `borrar(id)` — quita un nodo, anotación o flecha.
+- `titular_columna(columna, titulo)` — nombra una columna. 1-3 palabras.
+
+LÍMITES DE TEXTO:
+- `texto` de un nodo: 1 a 4 palabras.
+- `texto` de una anotación: hasta 10 palabras.
+- `titulo` de columna: 1 a 3 palabras.
+
+REGLA DURA — NO INVENTAR:
+- No inventes ids. Toda id que uses para `crear_nodo` viene de `ideas`.
+- No inventes archivos, nombres, tecnologías o gente. Si `repo` no tiene algo, no se llama con nombre del repo.
+- Si nada nuevo justifica una acción, NO LLAMES NINGUNA TOOL. Responder sin tool calls es la respuesta correcta y frecuente."""
+
+
+def _tools() -> list[dict]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "crear_nodo",
+                "description": "Crea un nodo en la pizarra. El id DEBE ser exactamente el de una idea en `ideas`.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "texto": {"type": "string"},
+                        "columna": {"type": "integer", "minimum": 0, "maximum": 3},
+                        "kind": {
+                            "type": "string",
+                            "enum": ["idea", "decision", "tarea", "duda"],
+                        },
+                    },
+                    "required": ["id", "texto", "columna", "kind"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "editar_nodo",
+                "description": "Cambia el texto de un nodo ya en la pizarra.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "texto": {"type": "string"},
+                    },
+                    "required": ["id", "texto"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "mover_nodo",
+                "description": "Mueve un nodo existente a otra columna.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "columna": {"type": "integer", "minimum": 0, "maximum": 3},
+                    },
+                    "required": ["id", "columna"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "conectar",
+                "description": "Dibuja una flecha entre dos nodos existentes. Solo si la relación fue dicha.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "de": {"type": "string"},
+                        "a": {"type": "string"},
+                        "label": {"type": "string"},
+                    },
+                    "required": ["de", "a"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "pegar_nota",
+                "description": "Pega una nota de detalle al lado de un nodo existente.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "nodo_id": {"type": "string"},
+                        "texto": {"type": "string"},
+                        "autor": {"type": "string"},
+                    },
+                    "required": ["nodo_id", "texto"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "borrar",
+                "description": "Quita del board un nodo, una anotación o una flecha por id.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                    "required": ["id"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "titular_columna",
+                "description": "Le pone un título a una columna.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "columna": {"type": "integer", "minimum": 0, "maximum": 3},
+                        "titulo": {"type": "string"},
+                    },
+                    "required": ["columna", "titulo"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+    ]
+
+
+def _text(v) -> str:
+    return v.strip() if isinstance(v, str) else ""
+
+
+def _int(v, default: int = 0) -> int:
+    if isinstance(v, bool):
+        return default
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and v.strip().lstrip("-").isdigit():
+        return int(v.strip())
+    return default
+
+
+def _apply(
+    board: architect_board.ArchitectBoard,
+    name: str,
+    args: dict,
+    allowed_ids: set[str],
+) -> dict | None:
+    """Turns one tool call into a board mutation, or None if it was rejected.
+
+    The apply functions swallow duplicates and unknown targets, so the model's
+    off-day calls never crash the board. The `allowed_ids` gate is the extra
+    guard `crear_nodo` needs — the id must be an idea we actually gave it."""
+    if name == "crear_nodo":
+        node_id = _text(args.get("id"))
+        if node_id not in allowed_ids:
+            return None
+        return architect_board.crear_nodo(
+            board,
+            node_id,
+            _text(args.get("texto")),
+            _int(args.get("columna")),
+            _text(args.get("kind")),
+        )
+    if name == "editar_nodo":
+        return architect_board.editar_nodo(
+            board, _text(args.get("id")), _text(args.get("texto"))
+        )
+    if name == "mover_nodo":
+        return architect_board.mover_nodo(
+            board, _text(args.get("id")), _int(args.get("columna"))
+        )
+    if name == "conectar":
+        return architect_board.conectar(
+            board,
+            _text(args.get("de")),
+            _text(args.get("a")),
+            _text(args.get("label")),
+        )
+    if name == "pegar_nota":
+        return architect_board.pegar_nota(
+            board,
+            _text(args.get("nodo_id")),
+            _text(args.get("texto")),
+            _text(args.get("autor")),
+        )
+    if name == "borrar":
+        return architect_board.borrar(board, _text(args.get("id")))
+    if name == "titular_columna":
+        return architect_board.titular_columna(
+            board, _int(args.get("columna")), _text(args.get("titulo"))
+        )
+    return None
+
+
+def _serialise_board(board: architect_board.ArchitectBoard) -> dict:
+    """A picture of the current pizarra shaped so the model can read it. Only
+    the fields it needs to decide what to do next — not the internal stacks."""
     return {
-        "id": point["id"],
-        "text": _words(point["text"], MAX_WORDS),
-        "kind": KIND_STYLE.get(point["kind"], "idea"),
+        "nodos": [
+            {
+                "id": n.id,
+                "texto": n.texto,
+                "columna": n.columna,
+                "kind": n.kind,
+            }
+            for n in board.nodes.values()
+        ],
+        "columnas": {str(k): v for k, v in board.titles.items()},
+        "flechas": [
+            {"id": a.id, "de": a.de, "a": a.a, "label": a.label}
+            for a in board.arrows.values()
+        ],
+        "anotaciones": [
+            {"id": an.id, "nodo_id": an.nodo_id, "texto": an.texto}
+            for an in board.annotations.values()
+        ],
     }
 
 
-def _plan(data: dict, points: list[Point]) -> tuple[str, list, list]:
-    """Reads the model's plan, keeping only what maps onto real ideas."""
-    by_id = {p["id"]: p for p in points}
-    placed: set[str] = set()
-    groups: list[canvas.PlannedGroup] = []
-
-    raw_groups = data.get("grupos")
-    for item in (raw_groups if isinstance(raw_groups, list) else [])[:MAX_GROUPS]:
-        if not isinstance(item, dict):
-            continue
-        notes: list[canvas.PlannedNote] = []
-        raw_notes = item.get("notas")
-        for entry in (raw_notes if isinstance(raw_notes, list) else [])[
-            :MAX_PER_GROUP
-        ]:
-            if not isinstance(entry, dict):
-                continue
-            idea = entry.get("idea")
-            if not isinstance(idea, str) or idea not in by_id or idea in placed:
-                continue
-            text = _words(entry.get("texto"), MAX_WORDS)
-            placed.add(idea)
-            notes.append(
-                {
-                    "id": idea,
-                    "text": text or _words(by_id[idea]["text"], MAX_WORDS),
-                    "kind": KIND_STYLE.get(by_id[idea]["kind"], "idea"),
-                }
-            )
-        if notes:
-            groups.append({"title": _words(item.get("titulo"), 3), "notes": notes})
-
-    left = [_fallback(p) for p in points if p["id"] not in placed]
-    if left:
-        # Their own column rather than tacked onto somebody else's theme: the
-        # model did not say they belong there.
-        if len(groups) < MAX_GROUPS:
-            groups.append({"title": "Suelto" if groups else "", "notes": left})
-        else:
-            groups[-1]["notes"].extend(left)
-
-    arrows: list[canvas.PlannedArrow] = []
-    seen: set[tuple[str, str]] = set()
-    raw_arrows = data.get("flechas")
-    for item in raw_arrows if isinstance(raw_arrows, list) else []:
-        if not isinstance(item, dict):
-            continue
-        source, target = item.get("de"), item.get("a")
-        if not isinstance(source, str) or not isinstance(target, str):
-            continue
-        if source not in placed or target not in placed or source == target:
-            continue
-        if (source, target) in seen or (target, source) in seen:
-            continue
-        seen.add((source, target))
-        arrows.append(
-            {
-                "source": source,
-                "target": target,
-                "label": _words(item.get("texto"), 2),
-            }
-        )
-
-    return _words(data.get("titulo"), 4), groups, arrows
-
-
-async def _draw(session_id: str, revision: int, elements: list[dict]) -> None:
-    store.set_board(session_id, revision, elements)
-    await emit(
-        session_id,
-        "architect.draw",
-        {
-            "revision": revision,
-            # This is the complete state of the board, not an addition.
-            "replace": True,
-            "elements": elements,
-        },
-    )
-
-
 async def architect(state: GraphState) -> dict:
-    digest = state["digest"]
-    # Only what the Orchestrator sent here. Questions and pending items are
-    # somebody else's list, not a node on the board.
-    points = state["routes"]["architect"]
     session_id = state["session_id"]
+    digest = state["digest"]
     revision = digest["revision"]
+    points = state["routes"]["architect"]
+
     if not points:
         return {}
 
     settings = get_settings()
-    data: dict = {}
-    started = time.time()
-    if settings.openai_api_key:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        try:
-            resp = await client.chat.completions.create(
-                model=settings.openai_architect_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            {
-                                "contexto": digest["summary"],
-                                "repo": repo.summary(store.get(session_id).repo),
-                                "ideas": [
-                                    {"id": p["id"], "text": p["text"]}
-                                    for p in points
-                                ],
-                            },
-                            ensure_ascii=False,
-                        ),
-                    },
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.1,
-            )
-            parsed = json.loads(resp.choices[0].message.content or "{}")
-            if isinstance(parsed, dict):
-                data = parsed
-        except Exception:
-            # One column of plain notes still beats an empty board.
-            logger.exception("architect plan failed; drawing the ideas flat")
+    if not settings.openai_api_key:
+        return {}
 
-    title, groups, arrows = _plan(data, points)
-    elements = canvas.build(title, groups, arrows)
+    session = store.get(session_id)
+    board = session.architect_board
+
+    allowed_ids = {p["id"] for p in points}
+    payload = {
+        "reunion": session.brief,
+        "contexto": digest["summary"],
+        "repo": repo.summary(session.repo),
+        "ideas": [
+            {
+                "id": p["id"],
+                "text": p["text"],
+                "kind": KIND_STYLE.get(p["kind"], "idea"),
+                "en_pizarra": p["id"] in board.nodes,
+            }
+            for p in points
+        ],
+        "pizarra_actual": _serialise_board(board),
+    }
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    started = time.time()
+    try:
+        resp = await client.chat.completions.create(
+            model=settings.openai_architect_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+            ],
+            tools=_tools(),
+            tool_choice="auto",
+            temperature=0.2,
+        )
+    except Exception:
+        # A model call the API refused is not the moment to guess at ops. The
+        # board keeps what it had; the next revision tries again.
+        logger.exception("architect call failed session=%s rev=%s", session_id, revision)
+        return {}
+
+    tool_calls = resp.choices[0].message.tool_calls or []
+    emitted = 0
+    for call in tool_calls:
+        try:
+            args = json.loads(call.function.arguments)
+        except Exception:
+            continue
+        if not isinstance(args, dict):
+            continue
+        op = _apply(board, call.function.name, args, allowed_ids)
+        if not op:
+            continue
+        await emit(
+            session_id, "architect.op", {"revision": revision, "op": op}
+        )
+        emitted += 1
+        # A small pause so the front can animate one op before the next lands.
+        # Without it a five-op turn arrives as a single blink and reads as the
+        # old whole-board redraw.
+        await asyncio.sleep(OP_INTERVAL_SEC)
+
+    # Snapshot the board so a browser that joins the session later has
+    # something to render from /digest without waiting for the next op.
+    store.set_board(session_id, revision, architect_board.to_elements(board))
+
     logger.info(
-        "architect rev=%s groups=%s notes=%s arrows=%s in %.2fs",
+        "architect rev=%s calls=%s ops=%s in %.2fs session=%s",
         revision,
-        len(groups),
-        len(points),
-        len(arrows),
+        len(tool_calls),
+        emitted,
         time.time() - started,
+        session_id,
     )
-    await _draw(session_id, revision, elements)
     return {}
