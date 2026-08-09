@@ -13,6 +13,9 @@ export type Cursor = { x: number; y: number };
 // joins and leaves. Activity is the one frame the SDK both sends over the
 // socket and delivers on the other side.
 const CURSOR = "c:";
+// The close notice rides the same signal, for the same reason: it is the only
+// frame the SDK delivers on the other side.
+const CLOSED = "x:";
 // The SDK throttles activity to one send per 3s *per kind*, so every distinct
 // position goes through. One decimal keeps repeats rare enough not to be eaten.
 const SEND_EVERY_MS = 66;
@@ -32,6 +35,7 @@ function parse(kind: string): Cursor | undefined {
 
 export function usePresence(sessionId: string, name: string) {
   const [cursors, setCursors] = useState<Record<string, Cursor>>({});
+  const [closed, setClosed] = useState(false);
   const lastSend = useRef(0);
 
   const { sendActivity, activity, presence, me } = useChannel({
@@ -67,6 +71,19 @@ export function usePresence(sessionId: string, name: string) {
     });
   }, [activity]);
 
+  // Activity entries expire after 5s, so this latches: a session that closed
+  // stays closed even once the notice has aged out of the channel.
+  useEffect(() => {
+    if (closed) return;
+    if ((activity ?? []).some((entry) => entry.kind.startsWith(CLOSED))) {
+      setClosed(true);
+    }
+  }, [activity, closed]);
+
+  const close = useCallback(() => {
+    sendActivity(`${CLOSED}1`);
+  }, [sendActivity]);
+
   const move = useCallback(
     (position: Cursor) => {
       const now = Date.now();
@@ -96,5 +113,5 @@ export function usePresence(sessionId: string, name: string) {
     }
   }
 
-  return { people, move, myId: me?.id };
+  return { people, move, myId: me?.id, closed, close };
 }

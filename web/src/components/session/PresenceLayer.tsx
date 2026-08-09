@@ -9,7 +9,15 @@ type PresenceLayerProps = {
   name: string;
   /** Called when somebody joins, leaves, or is finally named. */
   onRoster: (people: Author[]) => void;
+  /** True once this browser closed the session, so the notice goes out. */
+  ended?: boolean;
+  /** Called when somebody else closed the session. */
+  onEnded?: () => void;
 };
+
+// The SDK drops a repeat of the same kind inside 3s, so the notice goes out
+// just outside that window: whoever opens the link late still gets locked.
+const NOTICE_EVERY_MS = 3200;
 
 /** Who is in the room, ignoring where their mouse is. */
 function roster(people: Author[]) {
@@ -20,9 +28,22 @@ export default function PresenceLayer({
   sessionId,
   name,
   onRoster,
+  ended = false,
+  onEnded,
 }: PresenceLayerProps) {
-  const { people, move, myId } = usePresence(sessionId, name);
+  const { people, move, myId, closed, close } = usePresence(sessionId, name);
   const lastRoster = useRef("");
+
+  useEffect(() => {
+    if (closed) onEnded?.();
+  }, [closed, onEnded]);
+
+  useEffect(() => {
+    if (!ended) return;
+    close();
+    const id = setInterval(close, NOTICE_EVERY_MS);
+    return () => clearInterval(id);
+  }, [ended, close]);
 
   useEffect(() => {
     function onPointerMove(event: PointerEvent) {

@@ -55,6 +55,7 @@ function BoardView({
   isHost,
   ended,
   onEndSession,
+  onRemoteEnd,
   showShareModal,
   onOpenShareModal,
   onCloseShareModal,
@@ -65,6 +66,7 @@ function BoardView({
   isHost: boolean;
   ended: boolean;
   onEndSession: () => void;
+  onRemoteEnd: () => void;
   showShareModal: boolean;
   onOpenShareModal: () => void;
   onCloseShareModal: () => void;
@@ -86,6 +88,7 @@ function BoardView({
         onShare={onOpenShareModal}
         canEnd={isHost && !ended}
         onEndSession={onEndSession}
+        ended={ended}
       >
         <ArchitectBoard board={board} />
       </Whiteboard>
@@ -101,7 +104,13 @@ function BoardView({
         <CriticPanel notes={criticNotes} />
         <NotetakerPanel notes={notes} />
       </AgentRail>
-      <PresenceLayer sessionId={sessionId} name={name} onRoster={setPeople} />
+      <PresenceLayer
+        sessionId={sessionId}
+        name={name}
+        onRoster={setPeople}
+        ended={ended}
+        onEnded={onRemoteEnd}
+      />
       <TranscriptOverlay
         recording={recording}
         supported={supported}
@@ -126,6 +135,7 @@ function SessionInner({ sessionId }: { sessionId: string }) {
   const [isHost, setIsHost] = useState(false);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [ended, setEnded] = useState(false);
+  const remoteEnd = useCallback(() => setEnded(true), []);
 
   // `new=1` is stripped from the URL as soon as the share modal closes, so who
   // opened the session is remembered here instead. Without a database this is
@@ -156,6 +166,7 @@ function SessionInner({ sessionId }: { sessionId: string }) {
         isHost={isHost}
         ended={ended}
         onEndSession={() => setConfirmingEnd(true)}
+        onRemoteEnd={remoteEnd}
         showShareModal={showShareModal}
         onOpenShareModal={() => setShowShareModal(true)}
         onCloseShareModal={closeShareModal}

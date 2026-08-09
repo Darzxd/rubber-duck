@@ -32,6 +32,7 @@ type WhiteboardProps = {
   onShare?: () => void;
   canEnd?: boolean;
   onEndSession?: () => void;
+  ended?: boolean;
   children?: ReactNode;
 };
 
@@ -71,6 +72,7 @@ export default function Whiteboard({
   onShare,
   canEnd,
   onEndSession,
+  ended,
   children,
 }: WhiteboardProps) {
   const [activeTool, setActiveTool] = useState<ToolId>("select");
@@ -580,6 +582,7 @@ export default function Whiteboard({
           onShare={onShare}
           canEnd={canEnd}
           onEndSession={onEndSession}
+          ended={ended}
         />
 
         <div className="flex flex-1 overflow-hidden">
