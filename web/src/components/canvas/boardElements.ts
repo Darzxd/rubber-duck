@@ -239,6 +239,7 @@ export const NOTE_PRESETS: Record<
   string,
   { tag: string; tone: StickyTone }
 > = {
+  note: { tag: "Nota", tone: "amber" },
   idea: { tag: "Idea", tone: "amber" },
   decision: { tag: "Decisión", tone: "green" },
   task: { tag: "Tarea", tone: "blue" },

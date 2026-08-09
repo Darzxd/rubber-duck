@@ -35,7 +35,7 @@ type WhiteboardProps = {
 
 /** Tools that put ink on the board, and so bring the colour bar along. */
 const DRAWING_TOOLS: ToolId[] = ["pen", "shape", "arrow", "text"];
-const NOTE_TOOLS: ToolId[] = ["idea", "decision", "task", "doubt"];
+const NOTE_TOOLS: ToolId[] = ["note", "idea", "decision", "task", "doubt"];
 /** Tools that drop a fixed-size thing where you click, instead of dragging. */
 const STAMP_TOOLS: ToolId[] = [...NOTE_TOOLS, "text", "table", "poll"];
 
