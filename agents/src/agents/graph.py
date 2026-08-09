@@ -2,7 +2,6 @@ from langgraph.graph import END, START, StateGraph
 
 from agents.nodes.architect import architect
 from agents.nodes.critic import critic
-from agents.nodes.notetaker import notetaker
 from agents.nodes.scribe import scribe
 from agents.state import GraphState
 
@@ -39,18 +38,16 @@ def build_graph():
     g.add_node("architect", architect)
     g.add_node("critic", critic)
     g.add_node("scribe", scribe)
-    g.add_node("notetaker", notetaker)
 
     g.add_edge(START, "entry")
     g.add_conditional_edges(
         "entry",
         _route,
-        ["architect", "critic", "scribe", "notetaker", END],
+        ["architect", "critic", "scribe", END],
     )
     g.add_conditional_edges("architect", _after_architect, ["critic", END])
     g.add_edge("critic", END)
     g.add_edge("scribe", END)
-    g.add_edge("notetaker", END)
 
     return g.compile()
 

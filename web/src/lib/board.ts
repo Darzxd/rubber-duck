@@ -18,18 +18,6 @@ export type Board = {
   elements: BoardElement[];
 };
 
-export type NoteKind = "idea" | "decision" | "pregunta" | "pendiente";
-
-/** One entry of the Notetaker's pad, already ordered by what it thinks matters. */
-export type Note = {
-  id: string;
-  title: string;
-  body: string;
-  author: string;
-  kind: NoteKind;
-  weight: number;
-};
-
 /** The team's repo once somebody connected it. The file list stays on the
  * server: what the board needs to know is which repo, not what is in it. */
 export type ConnectedRepo = {
@@ -42,23 +30,8 @@ export type ConnectedRepo = {
   private: boolean;
 };
 
-/** One finding of the Critic. `path` is the evidence, not a decoration: a note
- * that cannot name a file the repo has never leaves the server. */
-export type CriticNote = {
-  id: string;
-  point: string;
-  about: string;
-  text: string;
-  path: string;
-  stance: "existe" | "choca";
-};
-
 const AGENTS_URL =
   process.env.NEXT_PUBLIC_AGENTS_URL ?? "http://localhost:8000";
-
-const EMPTY: Board = { revision: 0, elements: [] };
-
-const KINDS: NoteKind[] = ["idea", "decision", "pregunta", "pendiente"];
 
 type Payload = { event: string; content: Record<string, unknown> };
 
@@ -70,34 +43,6 @@ function isSnapshot(v: unknown): v is ArchitectSnapshot {
     Array.isArray(s.annotations) &&
     Array.isArray(s.arrows) &&
     Array.isArray(s.titles)
-  );
-}
-
-function isNote(v: unknown): v is Note {
-  if (typeof v !== "object" || v === null) return false;
-  const n = v as Record<string, unknown>;
-  return typeof n.id === "string" && typeof n.title === "string";
-}
-
-function toNote(v: Record<string, unknown>): Note {
-  const kind = v.kind;
-  return {
-    id: v.id as string,
-    title: v.title as string,
-    body: typeof v.body === "string" ? v.body : "",
-    author: typeof v.author === "string" ? v.author : "",
-    kind: KINDS.includes(kind as NoteKind) ? (kind as NoteKind) : "idea",
-    weight: typeof v.weight === "number" ? v.weight : 3,
-  };
-}
-
-function isCriticNote(v: unknown): v is CriticNote {
-  if (typeof v !== "object" || v === null) return false;
-  const n = v as Record<string, unknown>;
-  return (
-    typeof n.id === "string" &&
-    typeof n.text === "string" &&
-    typeof n.path === "string"
   );
 }
 
@@ -124,10 +69,8 @@ export type KnownAgent = "architect" | "critic";
 
 export type SessionStream = {
   board: Board;
-  notes: Note[];
   brief: string;
   repo: ConnectedRepo | null;
-  criticNotes: CriticNote[];
   cursors: Partial<Record<KnownAgent, AgentCursorState>>;
 };
 
@@ -137,12 +80,11 @@ const KNOWN_AGENTS: KnownAgent[] = ["architect", "critic"];
 // sitting on the last sticky it touched.
 const CURSOR_TIMEOUT_MS = 3000;
 
-/** One connection for every agent surface: each frame lands where it belongs. */
+/** One connection for the pizarra: bootstraps from /digest and folds every
+ *  agent op into a reducer that renders as canvas primitives. */
 export function useSessionStream(sessionId: string): SessionStream {
-  const [notes, setNotes] = useState<Note[]>([]);
   const [brief, setBrief] = useState("");
   const [repo, setRepo] = useState<ConnectedRepo | null>(null);
-  const [criticNotes, setCriticNotes] = useState<CriticNote[]>([]);
   // The Architect's board is kept as its structured state and derived to
   // elements on render — a single mutable reducer plus a version counter that
   // triggers React updates whenever an op lands.
@@ -157,11 +99,8 @@ export function useSessionStream(sessionId: string): SessionStream {
     Partial<Record<KnownAgent, ReturnType<typeof setTimeout>>>
   >({});
 
-  const written = useRef(0);
-  const checked = useRef(0);
-
-  // Whoever opens the link late still sees the pad and the brief: the stream
-  // only carries what happens from now on.
+  // Whoever opens the link late still sees the pizarra and the brief: the
+  // stream only carries what happens from now on.
   useEffect(() => {
     let live = true;
     fetch(`${AGENTS_URL}/digest/${sessionId}`)
@@ -170,9 +109,6 @@ export function useSessionStream(sessionId: string): SessionStream {
         if (!live) return;
         if (typeof data.brief === "string") setBrief(data.brief);
         setRepo(toRepo(data.repo));
-        if (Array.isArray(data.criticNotes)) {
-          setCriticNotes(data.criticNotes.filter(isCriticNote));
-        }
 
         // The structured snapshot is authoritative for a late-joiner. Ops
         // that arrive after this reflect changes since it was taken.
@@ -184,13 +120,6 @@ export function useSessionStream(sessionId: string): SessionStream {
             digest && typeof digest.revision === "number" ? digest.revision : 0;
           setRevision(rev);
         }
-
-        const pad = data.notepad as Record<string, unknown> | undefined;
-        if (!pad || !Array.isArray(pad.notes)) return;
-        if (typeof pad.revision !== "number") return;
-        if (pad.revision < written.current) return;
-        written.current = pad.revision;
-        setNotes(pad.notes.filter(isNote).map(toNote));
       })
       .catch(() => {});
     return () => {
@@ -199,8 +128,6 @@ export function useSessionStream(sessionId: string): SessionStream {
   }, [sessionId]);
 
   useEffect(() => {
-    written.current = 0;
-    checked.current = 0;
     const es = new EventSource(`${AGENTS_URL}/events/${sessionId}`);
 
     es.onmessage = (msg) => {
@@ -210,7 +137,7 @@ export function useSessionStream(sessionId: string): SessionStream {
       } catch {
         return;
       }
-      const { revision: rev, notes: pad, brief: text } = payload.content;
+      const { revision: rev, brief: text } = payload.content;
 
       if (payload.event === "session.brief") {
         if (typeof text === "string") setBrief(text);
@@ -220,16 +147,6 @@ export function useSessionStream(sessionId: string): SessionStream {
       if (payload.event === "session.repo") {
         const connected = toRepo(payload.content);
         if (connected) setRepo(connected);
-        return;
-      }
-
-      if (payload.event === "critic.notes") {
-        if (typeof rev !== "number" || rev < checked.current) return;
-        if (!Array.isArray(pad)) return;
-        checked.current = rev;
-        // The panel arrives whole every time, so this replaces rather than
-        // appends: the server already decided which findings still stand.
-        setCriticNotes(pad.filter(isCriticNote));
         return;
       }
 
@@ -256,7 +173,10 @@ export function useSessionStream(sessionId: string): SessionStream {
           return;
         }
         const known = agent as KnownAgent;
-        setCursors((prev) => ({ ...prev, [known]: { x: c.x as number, y: c.y as number } }));
+        setCursors((prev) => ({
+          ...prev,
+          [known]: { x: c.x as number, y: c.y as number },
+        }));
         const timer = cursorTimers.current[known];
         if (timer) clearTimeout(timer);
         cursorTimers.current[known] = setTimeout(() => {
@@ -267,14 +187,6 @@ export function useSessionStream(sessionId: string): SessionStream {
           });
           delete cursorTimers.current[known];
         }, CURSOR_TIMEOUT_MS);
-        return;
-      }
-
-      if (payload.event === "notetaker.pad") {
-        if (typeof rev !== "number" || rev < written.current) return;
-        if (!Array.isArray(pad)) return;
-        written.current = rev;
-        setNotes(pad.filter(isNote).map(toNote));
       }
     };
 
@@ -296,5 +208,5 @@ export function useSessionStream(sessionId: string): SessionStream {
     elements: deriveElements(architect.current),
   };
 
-  return { board, notes, brief, repo, criticNotes, cursors };
+  return { board, brief, repo, cursors };
 }

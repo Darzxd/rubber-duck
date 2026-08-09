@@ -252,10 +252,4 @@ async def critic(state: GraphState) -> dict:
         store.set_board(
             session_id, revision, architect_board.to_elements(board)
         )
-
-    # The legacy critic.notes panel is still fed while step 7 has not yet
-    # removed it — that way the panel and the pizarra agree during the
-    # transition and neither disappears mid-session.
-    everything = store.add_critic_notes(session_id, revision, notes)
-    await emit(session_id, "critic.notes", {"revision": revision, "notes": everything})
     return {}

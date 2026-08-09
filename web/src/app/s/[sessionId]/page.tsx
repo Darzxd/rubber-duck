@@ -5,8 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PortalProvider } from "@portalsdk/react";
 import AgentRail from "@/components/agents/AgentRail";
 import BriefCard from "@/components/agents/BriefCard";
-import CriticPanel from "@/components/agents/CriticPanel";
-import NotetakerPanel from "@/components/agents/NotetakerPanel";
 import RepoCard from "@/components/agents/RepoCard";
 import ArchitectBoard from "@/components/agents/ArchitectBoard";
 import Whiteboard from "@/components/canvas/Whiteboard";
@@ -76,8 +74,7 @@ function BoardView({
     author: name,
     enabled: !ended,
   });
-  const { board, notes, brief, repo, criticNotes, cursors } =
-    useSessionStream(sessionId);
+  const { board, brief, repo, cursors } = useSessionStream(sessionId);
   const [people, setPeople] = useState<Author[]>([]);
 
   return (
@@ -101,8 +98,6 @@ function BoardView({
           }}
         />
         <RepoCard sessionId={sessionId} repo={repo} />
-        <CriticPanel notes={criticNotes} />
-        <NotetakerPanel notes={notes} />
       </AgentRail>
       <PresenceLayer
         sessionId={sessionId}
