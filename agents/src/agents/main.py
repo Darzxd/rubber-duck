@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from agents import organizer_loop, organizer_store
+from agents import organizer_loop, organizer_store, repo
 from agents.bus import emit, sessions, subscribe, unsubscribe
 from agents.orchestrator import dispatch
 from agents.settings import get_settings
@@ -41,6 +41,14 @@ class IngestRequest(BaseModel):
 class BriefRequest(BaseModel):
     session_id: str
     brief: str
+
+
+class RepoRequest(BaseModel):
+    session_id: str
+    url: str
+    # Only sent on the second try, after GitHub refused the repo to an
+    # anonymous reader. It is used for this one call and never stored.
+    token: str = ""
 
 
 @app.get("/health")
@@ -103,6 +111,35 @@ async def brief(req: BriefRequest) -> dict:
     return {"brief": saved}
 
 
+@app.post("/repo")
+async def connect_repo(req: RepoRequest) -> dict:
+    """Reads the team's repo so the agents know what the product is made of.
+
+    Answers with a reason rather than an error when it cannot get in, because
+    the front acts on it: `needs_token` is what turns the card into its second
+    step instead of showing a failure."""
+    try:
+        index = await repo.fetch(req.url, req.token)
+    except repo.RepoError as e:
+        # req.token is deliberately absent from this line and from every other
+        # one in this file. It belongs to whoever pasted it.
+        logger.info("repo %s refused session=%s: %s", req.url, req.session_id, e.reason)
+        return {"ok": False, "reason": e.reason}
+
+    organizer_store.set_repo(req.session_id, index)
+    connected = {
+        "url": index["url"],
+        "owner": index["owner"],
+        "name": index["name"],
+        "description": index["description"],
+        "language": index["language"],
+        "files": index["total_files"],
+        "private": index["private"],
+    }
+    await emit(req.session_id, "session.repo", connected)
+    return {"ok": True, "repo": connected}
+
+
 @app.get("/digest/{session_id}")
 async def digest(session_id: str) -> dict:
     s = organizer_store.get(session_id)
@@ -113,6 +150,19 @@ async def digest(session_id: str) -> dict:
         "brief": s.brief,
         "notepad": s.notepad,
         "board": s.board,
+        # The index itself is large and is nobody's business on the front; what
+        # it needs is whether a repo is connected and which one.
+        "repo": {
+            "url": s.repo["url"],
+            "owner": s.repo["owner"],
+            "name": s.repo["name"],
+            "description": s.repo["description"],
+            "language": s.repo["language"],
+            "files": s.repo["total_files"],
+            "private": s.repo["private"],
+        }
+        if s.repo
+        else None,
     }
 
 

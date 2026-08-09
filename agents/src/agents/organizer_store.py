@@ -41,6 +41,9 @@ class SessionState:
     # drawn gets an empty canvas otherwise: the stream only carries what
     # happens from the moment somebody is listening.
     board: dict = field(default_factory=empty_board)
+    # The team's repo, read once when somebody connects it. It is context for
+    # understanding what is being said — never a source of what gets drawn.
+    repo: dict | None = None
     last_chunk_at: float = 0.0
     last_summarized: float = 0.0
 
@@ -94,3 +97,7 @@ def set_notepad(session_id: str, notepad: Notepad) -> None:
 
 def set_board(session_id: str, revision: int, elements: list[dict]) -> None:
     get(session_id).board = {"revision": revision, "elements": elements}
+
+
+def set_repo(session_id: str, index: dict | None) -> None:
+    get(session_id).repo = index
