@@ -122,17 +122,18 @@ class TestMalformedModelOutput:
 class TestPointCoercion:
     async def test_ids_derive_from_text(self, llm):
         llm.raw = digest_of([{"text": "Guardar todo en Supabase", "author": "N"}])
-        heard()
+        heard("guardar todo en Supabase")
 
         d = await pass_over_it()
         assert d["points"][0]["id"] == point_id("Guardar todo en Supabase")
 
     async def test_same_text_keeps_its_id_across_passes(self, llm):
         """This is what stops the canvas from rebuilding a node a human moved."""
-        heard()
+        heard("vamos a usar Portal")
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
         first = await pass_over_it()
 
+        heard("y dagre tambien")
         llm.raw = digest_of(
             [
                 {"text": "Usar Portal", "author": "N"},
@@ -150,14 +151,16 @@ class TestPointCoercion:
     )
     async def test_the_kind_decides_who_acts_on_it(self, llm, kind, expected):
         """An unreadable kind becomes an idea, so it still reaches the board."""
-        llm.raw = digest_of([{"text": "algo", "author": "N", "kind": kind}])
-        heard()
+        llm.raw = digest_of(
+            [{"text": "algo concreto", "author": "N", "kind": kind}]
+        )
+        heard("dijeron algo concreto")
 
         assert (await pass_over_it())["points"][0]["kind"] == expected
 
     async def test_a_point_with_no_kind_is_an_idea(self, llm):
-        llm.raw = digest_of([{"text": "algo", "author": "N"}])
-        heard()
+        llm.raw = digest_of([{"text": "algo concreto", "author": "N"}])
+        heard("dijeron algo concreto")
 
         assert (await pass_over_it())["points"][0]["kind"] == "idea"
 
@@ -168,7 +171,7 @@ class TestPointCoercion:
                 {"text": "usar   portal", "author": "I"},
             ]
         )
-        heard()
+        heard("vamos a usar Portal para la sesion")
 
         assert len((await pass_over_it())["points"]) == 1
 
@@ -176,7 +179,12 @@ class TestPointCoercion:
         llm.raw = digest_of(
             [{"text": f"idea numero {i}", "author": "N"} for i in range(40)]
         )
-        heard()
+        # Every point's words appear in what was said, so the cap is what
+        # limits the list — not the anti-hallucination filter.
+        heard(
+            "propuestas de idea numero "
+            + " ".join(str(i) for i in range(40))
+        )
 
         points = (await pass_over_it())["points"]
         assert len(points) == organizer.MAX_POINTS
@@ -195,10 +203,11 @@ class TestKeepByNumber:
     Retyping ten points every couple of seconds is what blew the 3s budget."""
 
     async def test_kept_number_reuses_the_point(self, llm):
-        heard()
+        heard("vamos a usar Portal")
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
         first = await pass_over_it()
 
+        heard("y dagre para el layout")
         llm.raw = digest_of([{"text": "y dagre", "author": "I"}], "dos", keep=[1])
         second = await pass_over_it()
 
@@ -206,7 +215,7 @@ class TestKeepByNumber:
         assert second["points"][1]["text"] == "y dagre"
 
     async def test_unnamed_points_fall_off_the_board(self, llm):
-        heard()
+        heard("vamos a usar Portal y dagre para el layout")
         llm.raw = digest_of(
             [{"text": "Usar Portal", "author": "N"}, {"text": "y dagre", "author": "I"}],
             "uno",
@@ -217,7 +226,7 @@ class TestKeepByNumber:
         assert [p["text"] for p in (await pass_over_it())["points"]] == ["y dagre"]
 
     async def test_a_number_that_does_not_exist_is_ignored(self, llm):
-        heard()
+        heard("vamos a usar Portal")
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
         await pass_over_it()
 
@@ -227,7 +236,7 @@ class TestKeepByNumber:
 
 class TestChangeDetection:
     async def test_identical_answer_does_not_redraw(self, llm):
-        heard()
+        heard("vamos a usar Portal")
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "igual")
         assert await pass_over_it() is not None
         # Same summary, same points: nothing for the board to do.
@@ -235,10 +244,11 @@ class TestChangeDetection:
         assert store.get("s").digest["revision"] == 1
 
     async def test_new_point_bumps_the_revision(self, llm):
-        heard()
+        heard("vamos a usar Portal")
         llm.raw = digest_of([{"text": "Usar Portal", "author": "N"}], "uno")
         await pass_over_it()
 
+        heard("y dagre para el layout")
         llm.raw = digest_of(
             [
                 {"text": "Usar Portal", "author": "N"},

@@ -13,8 +13,8 @@ from agents.state import KINDS, Digest, Point, TranscriptChunk, point_id
 
 logger = logging.getLogger("agents.organizer")
 
-# Cheap filter — laughter and lone fillers never reach the model. This is the
-# only judgement the Organizer makes about what people say.
+# Cheap filter — laughter, fillers and one-word blurts never reach the model.
+# This is the only judgement the Organizer makes about what people say.
 _LAUGH = re.compile(r"^(ja|ha|je|he|ji|jo|ho|xd)+[.!?,;:]*$", re.IGNORECASE)
 _FILLERS = {
     "si", "sí", "no", "ok", "okay", "vale", "eh", "ehh", "hmm", "aha",
@@ -23,12 +23,45 @@ _FILLERS = {
     "dale", "obvio", "exacto", "perfecto", "genial", "nada",
 }
 
+# A chunk under this many words has no room to say anything worth a point.
+# "link", "el cobro", "bien" — none of them are an idea, and letting them
+# through is what teaches the model to invent context ("link de compra").
+MIN_WORDS = 3
+
 # A summary longer than this stops being a summary.
 MAX_POINTS = 10
 
 # A few lines of run-up, so a fragment that starts mid-sentence still has
 # something to attach to. The running summary is the real memory.
 TAIL_CHUNKS = 8
+
+# Words that carry no meaning on their own. Used to check that a proposed
+# point has at least one real word that was actually said, not just filler
+# glued together with a hallucinated noun.
+_STOPWORDS = {
+    "a", "al", "algo", "algun", "alguna", "algunas", "alguno", "algunos", "ante", "antes",
+    "cada", "como", "con", "contra", "cual", "cuales", "cualquier", "cuando", "cuanto",
+    "de", "del", "desde", "donde", "e", "el", "ella", "ellas", "ellos", "en", "entre",
+    "es", "esa", "esas", "ese", "eso", "esos", "esta", "estan", "estas", "este", "esto",
+    "estos", "estoy", "ha", "hace", "hacer", "han", "hay", "la", "las", "le", "les", "lo",
+    "los", "mas", "más", "me", "mi", "mia", "mis", "mucho", "muy", "nada", "ni", "no",
+    "nos", "nuestra", "nuestro", "o", "otra", "otras", "otro", "otros", "para", "pero",
+    "poco", "por", "porque", "que", "qué", "quien", "quienes", "se", "según", "sea",
+    "ser", "si", "sí", "sido", "siendo", "sin", "sobre", "solo", "sólo", "son", "soy",
+    "su", "sus", "también", "tan", "tanto", "te", "ti", "tiene", "tienen", "todo",
+    "todos", "tu", "tus", "un", "una", "unas", "uno", "unos", "va", "vamos", "van",
+    "y", "ya", "yo",
+}
+
+
+def _normalise(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def _content_words(text: str) -> set[str]:
+    """The words a text actually says, once fillers and punctuation are gone."""
+    cleaned = re.sub(r"[¿?¡!.,;:()\"'`]", " ", text.lower())
+    return {w for w in cleaned.split() if w and w not in _STOPWORDS}
 
 
 def is_noise(chunk: TranscriptChunk) -> bool:
@@ -39,7 +72,10 @@ def is_noise(chunk: TranscriptChunk) -> bool:
         return True
     stripped = text.rstrip("¿?¡!.,;: ")
     words = stripped.split()
-    if len(words) <= 1 and stripped in _FILLERS:
+    if len(words) < MIN_WORDS:
+        # A short chunk with a filler in it (or made of fillers) is noise; a
+        # short chunk of substance is also almost always mid-sentence audio
+        # that will land again with more context on the next tick.
         return True
     return False
 
@@ -74,10 +110,10 @@ EL TEXTO VIENE DE RECONOCIMIENTO DE VOZ:
 - Risas, muletillas y charla de prueba del sistema ("se escucha?", "probando") simplemente no aparecen en el resumen. No las menciones, no las comentes, ignoralas.
 
 REGLA DURA — NO INVENTAR:
-- Todo lo que escribas tiene que poder rastrearse a palabras que alguien dijo.
-- No completes la idea de nadie. No agregues tecnologías, nombres ni decisiones que no aparecieron.
-- Ante la duda entre escribir de más o de menos, escribí de menos.
-- Si todavía no se dijo nada con sustancia, devolvé `points` vacío. Es una respuesta correcta.
+- Todo lo que escribas tiene que poder rastrearse a palabras que alguien dijo. Si alguien dijo "link" y nada más, NO existe un point "link de compra" ni "link del producto" — no había producto ni compra en la charla, lo estarías inventando.
+- No completes la idea de nadie. No agregues tecnologías, nombres, verbos, sustantivos ni decisiones que no aparecieron. Si lo que se dijo es una palabra suelta o una frase sin sustancia, NO ES UN POINT: devolvé `add` vacío. Esperá a que el equipo lo termine de decir.
+- Ante la duda entre escribir de más o de menos, escribí de menos. Casi siempre la respuesta correcta es `add: []`.
+- Si todavía no se dijo nada con sustancia, devolvé `add` vacío. Es una respuesta correcta y esperable.
 
 QUÉ NUNCA ES UN POINT:
 - Hablar de esta herramienta: la pizarra, el micrófono, los agentes, si se escucha, si anda, si funciona. "ya funciona", "está andando", "probando", "se ve la nota". Nada de eso es la reunión, es la gente mirando la pantalla.
@@ -117,18 +153,23 @@ def _text(v) -> str:
     return v.strip() if isinstance(v, str) else ""
 
 
-def _rebuild(data: dict, previous: list[Point]) -> list[Point] | None:
+def _rebuild(
+    data: dict, previous: list[Point], said: str
+) -> list[Point] | None:
     """Builds the new list out of the numbers the model kept and the ideas it
     added. Returns None when the answer was too broken to act on — the board
     then keeps what it already had.
 
     A model under load returns strings, nulls or half-built objects here.
-    Anything unreadable is dropped, never guessed."""
+    Anything unreadable is dropped, never guessed. A new point that names
+    words nobody said is silently rejected — the model hallucinated context
+    and we do not want it on the pizarra."""
     keep = data.get("keep")
     add = data.get("add")
     if not isinstance(keep, list) and not isinstance(add, list):
         return None
 
+    said_words = _content_words(said)
     out: list[Point] = []
     seen: set[str] = set()
 
@@ -149,6 +190,18 @@ def _rebuild(data: dict, previous: list[Point]) -> list[Point] | None:
         text = _text(item.get("text"))
         if not text:
             continue
+        if len(text.split()) < 2:
+            # A one-word point is either a filler that leaked through or a
+            # label the model built for itself. Either way, no idea.
+            continue
+        point_words = _content_words(text)
+        if point_words:
+            overlap = point_words & said_words
+            # More than half the content words of the point must actually
+            # appear in the transcript. Rejects "link de compra" when the room
+            # only said "link" — one word is not enough to license the rest.
+            if 2 * len(overlap) <= len(point_words):
+                continue
         pid = point_id(text)
         if pid in seen:
             continue
@@ -219,7 +272,16 @@ async def summarize(session_id: str, fresh: list[TranscriptChunk]) -> Digest | N
     if not isinstance(data, dict):
         data = {}
 
-    points = _rebuild(data, previous["points"])
+    # Everything the model can honestly ground a point in: what the room said
+    # this round, the run-up before, and the words it already had on the
+    # pizarra. Anything outside this is invented.
+    said = " ".join(
+        [c["text"] for c in before]
+        + [c["text"] for c in fresh]
+        + [p["text"] for p in previous["points"]]
+        + [previous["summary"] or ""]
+    )
+    points = _rebuild(data, previous["points"], said)
     if points is None:
         return None
     summary = _text(data.get("summary")) or previous["summary"]

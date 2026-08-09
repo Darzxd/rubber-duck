@@ -41,6 +41,7 @@ QUÉ RECIBÍS:
 
 CÓMO DECIDÍS QUÉ HACER:
 - Una idea con `en_pizarra: true` ya está. NO la vuelvas a crear.
+- Una idea con `text` de 1 o 2 palabras no vale un nodo — es probable que sea un fragmento sin contexto. NO llames crear_nodo sobre ella. Si el equipo la retoma con más sustancia, la próxima revisión te dará algo mejor.
 - Una idea nueva se sube al board solo si vale la pena — un detalle que nadie retomó puede quedarse afuera. Si dudás, no la agregues; volverá si el equipo insiste.
 - Un nodo del board cuya idea ya no tiene sentido (contradicha, obsoleta) se `borrar`.
 - Una relación se `conectar` SOLO si el equipo la dijo — dos ideas mencionadas juntas no son una relación.
@@ -217,10 +218,15 @@ def _apply(
         node_id = _text(args.get("id"))
         if node_id not in allowed_ids:
             return None
+        texto = _text(args.get("texto"))
+        # A one- or two-word sticky is either a leaked filler or the model
+        # inventing a label of its own. Neither belongs on the pizarra.
+        if len(texto.split()) < 2:
+            return None
         return architect_board.crear_nodo(
             board,
             node_id,
-            _text(args.get("texto")),
+            texto,
             _int(args.get("columna")),
             _text(args.get("kind")),
         )
