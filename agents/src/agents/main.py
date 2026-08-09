@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from agents import organizer_loop, organizer_store, repo
+from agents import architect_board, organizer_loop, organizer_store, repo
 from agents.bus import emit, sessions, subscribe, unsubscribe
 from agents.orchestrator import dispatch
 from agents.settings import get_settings
@@ -150,6 +150,10 @@ async def digest(session_id: str) -> dict:
         "brief": s.brief,
         "notepad": s.notepad,
         "board": s.board,
+        # The structured board is what the new frontend reducer hydrates from:
+        # a browser opening the session halfway through needs to know which
+        # node lives in which column, not just where the pixels ended up.
+        "architectBoard": architect_board.snapshot(s.architect_board),
         "criticNotes": s.critic_notes,
         # The index itself is large and is nobody's business on the front; what
         # it needs is whether a repo is connected and which one.

@@ -265,6 +265,72 @@ def titular_columna(
     }
 
 
+def snapshot(board: ArchitectBoard) -> dict:
+    """The structured board as JSON, for a browser opening the session late.
+    Every field the frontend reducer would have built up from ops, minus the
+    private stacks — those are backend bookkeeping."""
+    return {
+        "nodes": [
+            {
+                "id": n.id,
+                "texto": n.texto,
+                "columna": n.columna,
+                "kind": n.kind,
+                **dict(zip(("x", "y"), node_xy(board, n.columna, n.row))),
+            }
+            for n in board.nodes.values()
+        ],
+        "annotations": [
+            {
+                "id": a.id,
+                "nodo_id": a.nodo_id,
+                "texto": a.texto,
+                "autor": a.autor,
+                **dict(
+                    zip(
+                        ("x", "y"),
+                        annotation_xy(
+                            *node_xy(
+                                board,
+                                board.nodes[a.nodo_id].columna,
+                                board.nodes[a.nodo_id].row,
+                            ),
+                            a.slot,
+                        ),
+                    )
+                ),
+            }
+            for a in board.annotations.values()
+            if a.nodo_id in board.nodes
+        ],
+        "arrows": [
+            {
+                "id": ar.id,
+                "de": ar.de,
+                "a": ar.a,
+                "label": ar.label,
+                **dict(
+                    zip(
+                        ("x1", "y1", "x2", "y2"),
+                        _arrow_points(board, board.nodes[ar.de], board.nodes[ar.a]),
+                    )
+                ),
+            }
+            for ar in board.arrows.values()
+            if ar.de in board.nodes and ar.a in board.nodes
+        ],
+        "titles": [
+            {
+                "columna": columna,
+                "titulo": titulo,
+                **dict(zip(("x", "y"), title_xy(columna))),
+            }
+            for columna, titulo in board.titles.items()
+            if titulo
+        ],
+    }
+
+
 def to_elements(board: ArchitectBoard) -> list[dict]:
     """The whole board as canvas primitives, for consumers that expect the flat
     list (a browser opening a session that is already halfway through)."""

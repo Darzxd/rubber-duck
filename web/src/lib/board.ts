@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { BoardElement } from "@/components/canvas/boardElements";
+import {
+  applyOp,
+  deriveElements,
+  emptyState,
+  fromSnapshot,
+  isArchitectOp,
+  type ArchitectSnapshot,
+  type ArchitectState,
+} from "@/lib/architectBoard";
 
 export type Board = {
   revision: number;
@@ -53,29 +62,15 @@ const KINDS: NoteKind[] = ["idea", "decision", "pregunta", "pendiente"];
 
 type Payload = { event: string; content: Record<string, unknown> };
 
-// What each kind of element needs on top of the common style fields. An
-// element missing one of these would render as a hole in the board, so it
-// never gets there — the renderer is Nico's and assumes they are present.
-const SHAPE: Record<string, string[]> = {
-  path: ["points"],
-  rect: ["x", "y", "w", "h"],
-  ellipse: ["x", "y", "w", "h"],
-  triangle: ["x", "y", "w", "h"],
-  arrow: ["x1", "y1", "x2", "y2"],
-  text: ["x", "y", "text"],
-  note: ["x", "y", "text", "tag", "tone"],
-  image: ["x", "y", "w", "h", "src"],
-  poll: ["x", "y", "question", "options"],
-  table: ["x", "y", "cells", "cellW", "cellH"],
-};
-
-function isElement(v: unknown): v is BoardElement {
+function isSnapshot(v: unknown): v is ArchitectSnapshot {
   if (typeof v !== "object" || v === null) return false;
-  const e = v as Record<string, unknown>;
-  if (typeof e.id !== "string" || typeof e.color !== "string") return false;
-  if (typeof e.width !== "number" || typeof e.opacity !== "number") return false;
-  const needs = SHAPE[e.kind as string];
-  return Array.isArray(needs) && needs.every((key) => e[key] !== undefined);
+  const s = v as Record<string, unknown>;
+  return (
+    Array.isArray(s.nodes) &&
+    Array.isArray(s.annotations) &&
+    Array.isArray(s.arrows) &&
+    Array.isArray(s.titles)
+  );
 }
 
 function isNote(v: unknown): v is Note {
@@ -131,15 +126,16 @@ export type SessionStream = {
 
 /** One connection for every agent surface: each frame lands where it belongs. */
 export function useSessionStream(sessionId: string): SessionStream {
-  const [board, setBoard] = useState<Board>(EMPTY);
   const [notes, setNotes] = useState<Note[]>([]);
   const [brief, setBrief] = useState("");
   const [repo, setRepo] = useState<ConnectedRepo | null>(null);
   const [criticNotes, setCriticNotes] = useState<CriticNote[]>([]);
-  // Frames can arrive out of order after a reconnect. An older revision would
-  // undo a drawing the user already saw, so it never reaches the board. The
-  // same revision may come twice: nodes first, arrows a moment later.
-  const drawn = useRef(0);
+  // The Architect's board is kept as its structured state and derived to
+  // elements on render — a single mutable reducer plus a version counter that
+  // triggers React updates whenever an op lands.
+  const architect = useRef<ArchitectState>(emptyState());
+  const [revision, setRevision] = useState(0);
+
   const written = useRef(0);
   const checked = useRef(0);
 
@@ -157,18 +153,15 @@ export function useSessionStream(sessionId: string): SessionStream {
           setCriticNotes(data.criticNotes.filter(isCriticNote));
         }
 
-        const drawing = data.board as Record<string, unknown> | undefined;
-        if (
-          drawing &&
-          Array.isArray(drawing.elements) &&
-          typeof drawing.revision === "number" &&
-          drawing.revision >= drawn.current
-        ) {
-          drawn.current = drawing.revision;
-          setBoard({
-            revision: drawing.revision,
-            elements: drawing.elements.filter(isElement),
-          });
+        // The structured snapshot is authoritative for a late-joiner. Ops
+        // that arrive after this reflect changes since it was taken.
+        const snapshot = data.architectBoard;
+        if (isSnapshot(snapshot)) {
+          architect.current = fromSnapshot(snapshot);
+          const digest = data.digest as Record<string, unknown> | undefined;
+          const rev =
+            digest && typeof digest.revision === "number" ? digest.revision : 0;
+          setRevision(rev);
         }
 
         const pad = data.notepad as Record<string, unknown> | undefined;
@@ -185,7 +178,6 @@ export function useSessionStream(sessionId: string): SessionStream {
   }, [sessionId]);
 
   useEffect(() => {
-    drawn.current = 0;
     written.current = 0;
     checked.current = 0;
     const es = new EventSource(`${AGENTS_URL}/events/${sessionId}`);
@@ -197,7 +189,7 @@ export function useSessionStream(sessionId: string): SessionStream {
       } catch {
         return;
       }
-      const { revision, elements, notes: pad, brief: text } = payload.content;
+      const { revision: rev, notes: pad, brief: text } = payload.content;
 
       if (payload.event === "session.brief") {
         if (typeof text === "string") setBrief(text);
@@ -211,33 +203,43 @@ export function useSessionStream(sessionId: string): SessionStream {
       }
 
       if (payload.event === "critic.notes") {
-        if (typeof revision !== "number" || revision < checked.current) return;
+        if (typeof rev !== "number" || rev < checked.current) return;
         if (!Array.isArray(pad)) return;
-        checked.current = revision;
+        checked.current = rev;
         // The panel arrives whole every time, so this replaces rather than
         // appends: the server already decided which findings still stand.
         setCriticNotes(pad.filter(isCriticNote));
         return;
       }
 
-      if (payload.event === "architect.draw") {
-        if (typeof revision !== "number" || revision < drawn.current) return;
-        if (!Array.isArray(elements)) return;
-        drawn.current = revision;
-        setBoard({ revision, elements: elements.filter(isElement) });
+      if (payload.event === "architect.op") {
+        const op = payload.content.op;
+        if (!isArchitectOp(op)) return;
+        architect.current = applyOp(architect.current, op);
+        // Bump the revision so React re-renders. Using the op's revision when
+        // present keeps the counter in sync with the backend, but any change
+        // will do here — the state itself is the source of truth.
+        setRevision((prev) => (typeof rev === "number" ? rev : prev + 1));
         return;
       }
 
       if (payload.event === "notetaker.pad") {
-        if (typeof revision !== "number" || revision < written.current) return;
+        if (typeof rev !== "number" || rev < written.current) return;
         if (!Array.isArray(pad)) return;
-        written.current = revision;
+        written.current = rev;
         setNotes(pad.filter(isNote).map(toNote));
       }
     };
 
     return () => es.close();
   }, [sessionId]);
+
+  // Elements are derived on every render from the reducer's state. React sees
+  // a fresh array whenever the revision moves, which is when an op landed.
+  const board: Board = {
+    revision,
+    elements: deriveElements(architect.current),
+  };
 
   return { board, notes, brief, repo, criticNotes };
 }
