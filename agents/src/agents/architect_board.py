@@ -318,7 +318,10 @@ def cursor_from_op(
             (float(op["y1"]) + float(op["y2"])) / 2,
         )
     if kind == "pegar_nota":
-        return (float(op["x"]) + 20, float(op["y"]) + 20)
+        # The annotation renders in the side rail, not on the canvas, so the
+        # cursor visits the node it belongs to — otherwise it drifts to empty
+        # air where no one is looking.
+        return _node_center(board, op["nodo_id"])
     if kind == "titular_columna":
         return (float(op["x"]), float(op["y"]))
     if kind == "editar_nodo":
@@ -433,25 +436,10 @@ def to_elements(board: ArchitectBoard) -> list[dict]:
             )
         )
 
-    for ann in board.annotations.values():
-        node = board.nodes.get(ann.nodo_id)
-        if not node:
-            continue
-        nx, ny = node_xy(board, node.columna, node.row)
-        x, y = annotation_xy(nx, ny, ann.slot)
-        elements.append(
-            base(
-                f"an{ann.id}",
-                "#fde68a",
-                kind="note",
-                x=x,
-                y=y,
-                text=ann.texto,
-                tag="Nota",
-                tone="amber",
-            )
-        )
-
+    # Annotations belong in the side rail, not on the pizarra — they are what
+    # the agents wanted to clarify about a sticky, and a sticky next to a
+    # sticky just doubles the visual load. The snapshot still carries them so
+    # the front can list them in the rail.
     for arrow in board.arrows.values():
         source = board.nodes.get(arrow.de)
         target = board.nodes.get(arrow.a)

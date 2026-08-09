@@ -62,14 +62,6 @@ type NodeState = {
   y: number;
 };
 
-type AnnotationState = {
-  nodoId: string;
-  texto: string;
-  autor: string;
-  x: number;
-  y: number;
-};
-
 type ArrowState = {
   de: string;
   a: string;
@@ -82,9 +74,11 @@ type ArrowState = {
 
 type TitleState = { titulo: string; x: number; y: number };
 
+/** Annotations live in a side panel, not on the canvas, so the reducer for
+ *  the pizarra does not carry them. `useSessionStream` peels them off the
+ *  event stream on its own and pushes them into its own notes list. */
 export type ArchitectState = {
   nodes: Map<string, NodeState>;
-  annotations: Map<string, AnnotationState>;
   arrows: Map<string, ArrowState>;
   titles: Map<number, TitleState>;
 };
@@ -92,7 +86,6 @@ export type ArchitectState = {
 export function emptyState(): ArchitectState {
   return {
     nodes: new Map(),
-    annotations: new Map(),
     arrows: new Map(),
     titles: new Map(),
   };
@@ -113,12 +106,10 @@ const STYLE: Record<
 };
 
 const INK = "#525252";
-const ANNOTATION_COLOUR = "#fde68a";
 
 function copy(state: ArchitectState): ArchitectState {
   return {
     nodes: new Map(state.nodes),
-    annotations: new Map(state.annotations),
     arrows: new Map(state.arrows),
     titles: new Map(state.titles),
   };
@@ -171,31 +162,18 @@ export function applyOp(state: ArchitectState, op: ArchitectOp): ArchitectState 
       return next;
     }
     case "pegar_nota": {
-      next.annotations.set(op.id, {
-        nodoId: op.nodo_id,
-        texto: op.texto,
-        autor: op.autor ?? "",
-        x: op.x,
-        y: op.y,
-      });
-      return next;
+      // Notes go to a side panel, not the pizarra. The hook consumes this op
+      // path separately; it never reaches the canvas reducer.
+      return state;
     }
     case "borrar": {
       if (next.nodes.has(op.id)) {
         next.nodes.delete(op.id);
-        // A node's arrows and annotations lose their anchor when it goes.
-        // The backend cascades the same way — this keeps the two ends aligned
-        // without needing extra ops on the wire.
-        for (const [aid, ann] of next.annotations) {
-          if (ann.nodoId === op.id) next.annotations.delete(aid);
-        }
+        // Arrows lose their anchor when a node goes. The backend cascades the
+        // same way — this keeps the two ends aligned without extra ops.
         for (const [arid, arrow] of next.arrows) {
           if (arrow.de === op.id || arrow.a === op.id) next.arrows.delete(arid);
         }
-        return next;
-      }
-      if (next.annotations.has(op.id)) {
-        next.annotations.delete(op.id);
         return next;
       }
       if (next.arrows.has(op.id)) {
@@ -261,15 +239,7 @@ export function fromSnapshot(snapshot: ArchitectSnapshot): ArchitectState {
       y: n.y,
     });
   }
-  for (const a of snapshot.annotations) {
-    state.annotations.set(a.id, {
-      nodoId: a.nodo_id,
-      texto: a.texto,
-      autor: a.autor ?? "",
-      x: a.x,
-      y: a.y,
-    });
-  }
+  // Annotations are read by useSessionStream directly, not stored here.
   for (const ar of snapshot.arrows) {
     state.arrows.set(ar.id, {
       de: ar.de,
@@ -322,20 +292,6 @@ export function deriveElements(state: ArchitectState): BoardElement[] {
       text: node.texto,
       tag: style.tag,
       tone: style.tone,
-    });
-  }
-
-  for (const [id, ann] of state.annotations) {
-    els.push({
-      ...base,
-      id: `an${id}`,
-      color: ANNOTATION_COLOUR,
-      kind: "note",
-      x: ann.x,
-      y: ann.y,
-      text: ann.texto,
-      tag: "Nota",
-      tone: "amber",
     });
   }
 

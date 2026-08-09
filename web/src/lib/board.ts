@@ -67,14 +67,28 @@ export type AgentCursorState = { x: number; y: number };
 
 export type KnownAgent = "architect" | "critic";
 
+/** One side-panel note. It is what the Architect or Critic wanted to add as
+ *  context to something already visible on the pizarra — not a repeat of what
+ *  someone said, and not big enough to be a sticky. */
+export type SideNote = {
+  id: string;
+  text: string;
+  source: KnownAgent;
+  nodeId: string;
+};
+
 export type SessionStream = {
   board: Board;
   brief: string;
   repo: ConnectedRepo | null;
   cursors: Partial<Record<KnownAgent, AgentCursorState>>;
+  notes: SideNote[];
 };
 
 const KNOWN_AGENTS: KnownAgent[] = ["architect", "critic"];
+// The panel is a summary, not a wall. Anything past this is older than what
+// anyone reading the rail actually cares about.
+const MAX_NOTES = 8;
 // How long a cursor stays visible after the last op. Long enough for the eye
 // to catch the move, short enough that a quiet agent does not leave a ghost
 // sitting on the last sticky it touched.
@@ -92,6 +106,7 @@ export function useSessionStream(sessionId: string): SessionStream {
   const [cursors, setCursors] = useState<
     Partial<Record<KnownAgent, AgentCursorState>>
   >({});
+  const [notes, setNotes] = useState<SideNote[]>([]);
   // A pending clear timer per agent, so a burst of cursor updates keeps
   // resetting the same countdown instead of blinking off between ops.
   const cursorTimers = useRef<
@@ -114,6 +129,16 @@ export function useSessionStream(sessionId: string): SessionStream {
         const snapshot = data.architectBoard;
         if (isSnapshot(snapshot)) {
           setArchitect(fromSnapshot(snapshot));
+          setNotes(
+            snapshot.annotations
+              .filter((a) => a.nodo_id)
+              .map((a) => ({
+                id: a.id,
+                text: a.texto,
+                source: (a.autor === "Critic" ? "critic" : "architect") as KnownAgent,
+                nodeId: a.nodo_id,
+              })),
+          );
           const digest = data.digest as Record<string, unknown> | undefined;
           const rev =
             digest && typeof digest.revision === "number" ? digest.revision : 0;
@@ -152,7 +177,28 @@ export function useSessionStream(sessionId: string): SessionStream {
       if (payload.event === "architect.op") {
         const op = payload.content.op;
         if (!isArchitectOp(op)) return;
+        if (op.type === "pegar_nota") {
+          const source: KnownAgent =
+            op.autor === "Critic" ? "critic" : "architect";
+          setNotes((prev) => {
+            const without = prev.filter((n) => n.id !== op.id);
+            const next: SideNote = {
+              id: op.id,
+              text: op.texto,
+              source,
+              nodeId: op.nodo_id,
+            };
+            return [next, ...without].slice(0, MAX_NOTES);
+          });
+          return;
+        }
         setArchitect((prev) => applyOp(prev, op));
+        // A node removal cascades: the notes that hung off it lose their
+        // anchor, so they leave with it — the reducer already dropped the
+        // node when this ran.
+        if (op.type === "borrar") {
+          setNotes((prev) => prev.filter((n) => n.nodeId !== op.id && n.id !== op.id));
+        }
         if (typeof rev === "number") setRevision(rev);
         return;
       }
@@ -204,5 +250,5 @@ export function useSessionStream(sessionId: string): SessionStream {
     [architect, revision],
   );
 
-  return { board, brief, repo, cursors };
+  return { board, brief, repo, cursors, notes };
 }
