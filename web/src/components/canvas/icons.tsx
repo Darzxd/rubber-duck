@@ -214,10 +214,13 @@ export const ArrowToolIcon = ({ className }: IconProps) => (
   />
 );
 
+// The set has no note glyph, so this is its square with the bottom-right
+// corner folded: same 3.6 radius, so it sits next to the shape tools cleanly.
 export const NoteIcon = ({ className }: IconProps) => (
-  <Line
-    d="M4.5 6a1.5 1.5 0 0 1 1.5-1.5h12A1.5 1.5 0 0 1 19.5 6v7.5l-6 6H6a1.5 1.5 0 0 1-1.5-1.5zM19.5 13.5h-4.5a1.5 1.5 0 0 0-1.5 1.5v4.5"
+  <Glyph
+    d="M16.6 1C18.5882 1 20.2 2.61178 20.2 4.6V13L13 20.2001H4.6C2.61177 20.2001 1 18.5883 1 16.6001L1 4.6C1 2.61177 2.61178 1 4.6 1L16.6 1ZM20.2 13H16.6C14.6118 13 13 14.6118 13 16.6V20.2001"
     className={className}
+    cap={false}
   />
 );
 
