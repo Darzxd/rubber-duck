@@ -6,6 +6,7 @@ import time
 from openai import AsyncOpenAI
 
 from agents import organizer_store as store
+from agents import repo
 from agents.bus import emit
 from agents.settings import get_settings
 from agents.state import KINDS, Digest, Point, TranscriptChunk, point_id
@@ -56,6 +57,17 @@ CÓMO TRABAJÁS:
 - Reescribir un punto que no cambió hace parpadear la pizarra y te cuesta tiempo. Si sigue valiendo igual, va en `keep` y listo.
 - Para corregir un punto: dejalo afuera de `keep` y escribí la versión buena en `add`. Hacelo solo si de verdad cambió lo que se entiende.
 
+UNA IDEA, UN SOLO POINT:
+- Antes de agregar algo a `add`, buscalo en `resumen_anterior`. Si ya está, aunque esté dicho con otras palabras, no lo agregues de nuevo.
+- Cuando el equipo confirma o decide algo que ya tenías anotado como propuesta, NO nace un point nuevo: sacás el viejo de `keep` y escribís el mismo, ahora con `kind` de `decision`. "Usar Stripe" y "Se decide usar Stripe" son el mismo point, no dos.
+- Que dos personas digan lo mismo no son dos points. Que alguien repita algo tampoco.
+
+EL REPO DEL EQUIPO:
+- A veces recibís `repo`: cómo se llama el proyecto, de qué es y qué carpetas tiene.
+- Sirve para UNA cosa: entender lo que escuchaste. Si alguien dice "el organaiser" y en el repo hay una carpeta `organizer`, ya sabés qué dijo. Si nombran un módulo, sabés que existe.
+- No es una fuente de puntos. Nada del repo entra al resumen si nadie lo dijo en voz alta. Que exista una carpeta `pagos` no significa que el equipo esté hablando de pagos.
+- Nunca escribas un point sobre el repo mismo, ni sobre lo que el repo tiene o le falta.
+
 EL TEXTO VIENE DE RECONOCIMIENTO DE VOZ:
 - Llega cortado a mitad de frase. Líneas seguidas suelen ser UNA sola idea: unilas.
 - Tiene errores de audio. Podés corregir una palabra mal escuchada solo si suena casi igual a la correcta.
@@ -76,6 +88,8 @@ Ante cualquiera de estos, el point no existe. Ni siquiera reformulado.
 
 QUÉ ES UN POINT:
 Una idea concreta, en una línea corta, tal como se dijo: una propuesta, una decisión, un problema, una parte del sistema, un paso. Máximo 10. Lo más importante primero.
+
+El `text` es corto y directo, como se anota en una pizarra: "Usar Stripe", "Falta el dominio propio", "Límite por sesiones, no por tiempo". Nunca lo narres: no empieza con "Se propone", "Se decide", "El equipo acuerda", "Se sugiere". Eso ya lo dice el `kind`. Máximo 12 palabras.
 
 El `summary` cuenta de qué se está hablando, no quién habló. Nunca "Fulano dice que...".
 
@@ -169,6 +183,7 @@ async def summarize(session_id: str, fresh: list[TranscriptChunk]) -> Digest | N
     previous = state.digest
     payload = {
         "reunion": state.brief,
+        "repo": repo.summary(state.repo),
         "dicho_antes": [f"{c['author']}: {c['text']}" for c in before],
         "nuevo": [f"{c['author']}: {c['text']}" for c in fresh],
         "resumen_anterior": {

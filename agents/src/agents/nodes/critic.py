@@ -72,10 +72,12 @@ def _without_path(text: str, path: str) -> str:
 
 
 def _reports_absence(text: str) -> bool:
-    head = text.strip().lower()
-    return any(head.startswith(p) for p in _ABSENCE) or any(
-        f" {p}" in head for p in ("no hay ", "no existe ", "no se encontr")
-    )
+    """An absence anywhere in the line poisons the whole note.
+
+    "Ya hay sesiones, pero no hay nada de Stripe" reads as evidence about
+    Stripe, and the file beside it is about sessions. Half a true sentence
+    is worse than no sentence: the reader trusts the path."""
+    return any(p in text.lower() for p in _ABSENCE)
 
 
 def _read(data: dict, points: list[Point], files: set[str]) -> list[dict]:
@@ -86,6 +88,9 @@ def _read(data: dict, points: list[Point], files: set[str]) -> list[dict]:
     by_id = {p["id"]: p for p in points}
     notes: list[dict] = []
     seen: set[str] = set()
+    # The same finding against two proposals that say almost the same thing
+    # reads as two findings. One panel, one line per thing found.
+    said: set[tuple[str, str]] = set()
 
     raw = data.get("notas")
     for item in (raw if isinstance(raw, list) else [])[:MAX_NOTES]:
@@ -102,6 +107,10 @@ def _read(data: dict, points: list[Point], files: set[str]) -> list[dict]:
             continue
         if point in seen:
             continue
+        clean = _without_path(text, path.strip())
+        if (clean.lower(), path.strip()) in said:
+            continue
+        said.add((clean.lower(), path.strip()))
         seen.add(point)
         stance = item.get("tipo")
         notes.append(
@@ -109,7 +118,7 @@ def _read(data: dict, points: list[Point], files: set[str]) -> list[dict]:
                 "id": f"c_{point}",
                 "point": point,
                 "about": by_id[point]["text"],
-                "text": _without_path(text, path.strip()),
+                "text": clean,
                 "path": path.strip(),
                 "stance": stance if stance in ("existe", "choca") else "existe",
             }

@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 
 from agents import canvas
 from agents import organizer_store as store
+from agents import repo
 from agents.bus import emit
 from agents.settings import get_settings
 from agents.state import GraphState, Point
@@ -23,6 +24,7 @@ No dibujás. Decidís la estructura. Las coordenadas las pone otro.
 QUÉ RECIBÍS:
 - `contexto`: el resumen vivo de la conversación.
 - `ideas`: lo que se dijo, cada una con su `id`. Son las únicas que podés poner en la pizarra.
+- `repo`: a veces, cómo está armado el proyecto del equipo. Te sirve para agrupar: si dos ideas caen en la misma parte del sistema, van juntas. Nada más. No es una idea, no va a la pizarra, no lo menciones en ningún título.
 
 CÓMO ARMÁS EL ESQUEMA:
 - Agrupá las ideas por tema. Un grupo es una columna de la pizarra.
@@ -196,6 +198,7 @@ async def architect(state: GraphState) -> dict:
                         "content": json.dumps(
                             {
                                 "contexto": digest["summary"],
+                                "repo": repo.summary(store.get(session_id).repo),
                                 "ideas": [
                                     {"id": p["id"], "text": p["text"]}
                                     for p in points

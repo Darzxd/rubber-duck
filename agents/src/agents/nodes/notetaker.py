@@ -5,6 +5,7 @@ import time
 from openai import AsyncOpenAI
 
 from agents import organizer_store as store
+from agents import repo
 from agents.bus import emit
 from agents.settings import get_settings
 from agents.state import KINDS, GraphState, Note, Notepad, note_id
@@ -23,6 +24,7 @@ QUÉ RECIBÍS:
 - `de_que_se_habla`: el resumen vivo de la conversación.
 - `puntos`: todo lo que se dijo que vale algo, de todos los que hablaron, con quién lo dijo.
 - `bloc_anterior`: las notas que vos ya escribiste, numeradas.
+- `repo`: a veces, de qué está hecho el proyecto. Es para escribir bien un nombre técnico que se escuchó mal, nada más. Nunca escribas una nota sobre el repo: el bloc es de lo que dijo la gente.
 
 CÓMO TRABAJÁS:
 - `bloc_anterior` es tu memoria. Lo que no quede ahí, se pierde.
@@ -134,6 +136,7 @@ async def notetaker(state: GraphState) -> dict:
 
     payload = {
         "instrucciones": session.brief,
+        "repo": repo.summary(session.repo),
         "de_que_se_habla": state["digest"]["summary"],
         "puntos": [
             {"text": p["text"], "author": p["author"], "kind": p["kind"]}
