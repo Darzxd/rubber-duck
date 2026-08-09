@@ -44,6 +44,9 @@ class SessionState:
     # The team's repo, read once when somebody connects it. It is context for
     # understanding what is being said — never a source of what gets drawn.
     repo: dict | None = None
+    # The Critic is handed each proposal once, so its notes accumulate here
+    # rather than being rewritten — nothing would bring an old one back.
+    critic_notes: list[dict] = field(default_factory=list)
     last_chunk_at: float = 0.0
     last_summarized: float = 0.0
 
@@ -101,3 +104,19 @@ def set_board(session_id: str, revision: int, elements: list[dict]) -> None:
 
 def set_repo(session_id: str, index: dict | None) -> None:
     get(session_id).repo = index
+
+
+# Enough to fill the panel twice. Past that the oldest objection is about a
+# proposal nobody is discussing any more.
+MAX_CRITIC_NOTES = 12
+
+
+def add_critic_notes(session_id: str, revision: int, notes: list[dict]) -> list[dict]:
+    """Adds what the Critic just found, newest first, one note per proposal."""
+    s = get(session_id)
+    fresh = [dict(n, revision=revision) for n in notes]
+    keep = {n["point"] for n in fresh}
+    s.critic_notes = (fresh + [n for n in s.critic_notes if n["point"] not in keep])[
+        :MAX_CRITIC_NOTES
+    ]
+    return s.critic_notes

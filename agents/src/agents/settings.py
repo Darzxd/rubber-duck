@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     openai_organizer_model: str = "gpt-4.1-mini"
     openai_architect_model: str = "gpt-4.1-mini"
     openai_notetaker_model: str = "gpt-4.1-mini"
+    openai_critic_model: str = "gpt-4.1-mini"
     # The only model that emits deltas while somebody is still talking. Every
     # other one waits for the turn to close, which costs us 3-6s of dead screen.
     # It refuses turn_detection of any kind (verified against the API, twice),

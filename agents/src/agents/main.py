@@ -150,6 +150,7 @@ async def digest(session_id: str) -> dict:
         "brief": s.brief,
         "notepad": s.notepad,
         "board": s.board,
+        "criticNotes": s.critic_notes,
         # The index itself is large and is nobody's business on the front; what
         # it needs is whether a repo is connected and which one.
         "repo": {
